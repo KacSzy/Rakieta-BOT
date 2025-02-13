@@ -11,6 +11,9 @@ GUILD_ID = os.getenv("GUILD")
 GUILD = discord.Object(id=GUILD_ID)
 
 intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+
 bot = commands.Bot(command_prefix="_", intents=intents)
 
 @bot.event
