@@ -1,8 +1,7 @@
 import os
 
-import discord
 from discord.ext import commands
-from const import BLOCKED_WORDS, BLOCKED_LINKS, ALLOWED_ROLES_TO_POST_LINKS
+from const import BLOCKED_WORDS, BLOCKED_LINKS
 
 LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 
@@ -18,6 +17,9 @@ class Events(commands.Cog):
 
         if message.author.bot:
             return
+
+        if 'ustawienia' in str(message.content):
+            await message.reply('[Ustawienia Edka](<https://www.youtube.com/watch?v=PeMm2dlzF3k>)')
 
         message_str: str = message.content.lower()
         # log_channel = self.bot.get_channel(LOG_CHANNEL_ID)
