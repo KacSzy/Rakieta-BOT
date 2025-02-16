@@ -1,4 +1,5 @@
 import discord
+from discord import Activity, ActivityType
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
@@ -18,6 +19,8 @@ bot = commands.Bot(command_prefix="_", intents=intents)
 
 @bot.event
 async def on_ready():
+    activity = discord.Game(name="Rocket League")
+    await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"Logged as {bot.user}")
     await bot.tree.sync(guild=GUILD)
 

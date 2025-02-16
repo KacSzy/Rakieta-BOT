@@ -1,5 +1,6 @@
 BLOCKED_WORDS = [
     'm4lol4tami',
+    'M40L4TAM!'
 ]
 BLOCKED_LINKS = [
     'steamcommunity.com/gift/activation/id=',
