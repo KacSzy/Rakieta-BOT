@@ -5,4 +5,5 @@ BLOCKED_WORDS = [
 BLOCKED_LINKS = [
     'steamcommunity.com/gift/activation/id=',
     'https://steamecomnmunity.com/',
+    'steam gift 50$',
 ]
