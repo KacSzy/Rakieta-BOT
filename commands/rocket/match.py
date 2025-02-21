@@ -61,9 +61,31 @@ class MatchView(discord.ui.View):
             await interaction.response.send_message("Już jesteś w meczu!", ephemeral=True)
             return
 
-        if get_rank(user) != self.required_role:
-            await interaction.response.send_message("Nie możesz dołączyć bo masz inną rangę.", ephemeral=True)
-            return
+        user_rank = get_rank(user)
+
+        gc_ranks = ["GC1", "GC2", "GC3", "SSL"]
+
+        if self.required_role in gc_ranks:
+            allowed_ranks = []
+
+            if self.required_role == "GC1":
+                allowed_ranks = ["GC1", "GC2"]
+            elif self.required_role == "GC2":
+                allowed_ranks = ["GC1", "GC2", "GC3"]
+            elif self.required_role == "GC3":
+                allowed_ranks = ["GC2", "GC3", "SSL"]
+            elif self.required_role == "SSL":
+                allowed_ranks = ["GC3", "SSL"]
+
+            if user_rank not in allowed_ranks:
+                await interaction.response.send_message(
+                    "Nie możesz dołączyć, ponieważ Twoja ranga nie spełnia wymagań (+-1).", ephemeral=True)
+                return
+
+        else:
+            if user_rank != self.required_role:
+                await interaction.response.send_message("Nie możesz dołączyć, bo masz inną rangę.", ephemeral=True)
+                return
 
         user_balance = get_user_balance(user.id)
         if user_balance < self.stake:
