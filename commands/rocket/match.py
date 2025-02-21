@@ -38,7 +38,7 @@ class MatchView(discord.ui.View):
     async def on_timeout(self):
         self.clear_items()
         if self.message:
-            await self.message.edit(view=self)
+            await self.message.edit(view=None)
 
     async def send_initial_message(self, interaction: discord.Interaction):
         embed = discord.Embed(
