@@ -1,6 +1,7 @@
 BLOCKED_WORDS = [
     'm4lol4tami',
     'm4lo4tam!',
+    'm40l4tam!'
 ]
 
 BLOCKED_LINKS = [
