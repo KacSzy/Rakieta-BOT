@@ -1,5 +1,5 @@
 from discord.ext import commands
-from const import BLOCKED_WORDS, BLOCKED_LINKS, LOG_CHANNEL_ID
+from const import BLOCKED_WORDS, LOG_CHANNEL_ID
 
 
 class Events(commands.Cog):
@@ -24,14 +24,8 @@ class Events(commands.Cog):
         if any(blocked_word in message_str for blocked_word in BLOCKED_WORDS):
             await message.delete()
             await message.channel.send(f'{message.author.mention} banned.')
-            await log_channel.send(f'🚨 {message.author.mention} scam serwer: `{message.content}`')
-            await message.guild.ban(message.author, reason="Scam serwer (rakieta)")
-
-        elif any(blocked_link in message_str for blocked_link in BLOCKED_LINKS):
-            await message.delete()
-            await message.channel.send(f'{message.author.mention} banned.')
-            await log_channel.send(f'🚨 {message.author.mention} scam link: `{message.content}`')
-            await message.guild.ban(message.author, reason="Scam link (rakieta)")
+            await log_channel.send(f'🚨 {message.author.mention} scam: `{message.content}`')
+            await message.guild.ban(message.author, reason=f'Rakietowy scam: {message.content}')
 
 
 async def setup(bot):
