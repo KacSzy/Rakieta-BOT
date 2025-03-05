@@ -7,7 +7,7 @@ BLOCKED_WORDS = [
 BLOCKED_LINKS = [
     'steamcommunity.com/gift/activation/id=',
     'steamecomnmunity.com/',
-    'steam gift 50$',
+    'gift 50$',
     'is.gd/',
     'steam-shortlink.xyz'
 ]
