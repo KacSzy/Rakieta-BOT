@@ -2,7 +2,7 @@ BLOCKED_WORDS = [
     'm4lol4tami',
     'm4lo4tam!',
     'm40l4tam!',
-    'steamcommunity.com/gift/activation/id=',
+    'steamcommunity.com/gift',
     'steamecomnmunity.com/',
     'sterncommunity'
     'gift 50$',
