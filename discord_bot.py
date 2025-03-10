@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix="_", intents=intents)
 
 @bot.event
 async def on_ready():
-    activity = discord.Game(name="Bot Simulator")
+    activity = discord.Game(name="xx_Bot Simulator_xx")
     await bot.change_presence(status=discord.Status.online, activity=activity)
     # await bot.change_presence(activity=discord.CustomActivity(name='...'))
     print(f"Logged as {bot.user}")
