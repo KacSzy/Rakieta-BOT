@@ -1,11 +1,9 @@
 import asyncio
-import os
 
 import discord
-import requests
 
-UNBELIEVABOAT_API_KEY = os.getenv("UNBELIEVABOAT_API_KEY")
-GUILD_ID = os.getenv("GUILD")
+from commands.unbelievable_API.add_money import add_money_unbelievable
+
 ADMIN_ID = 567984269516079104
 
 
@@ -27,7 +25,7 @@ class ResultView(discord.ui.View):
         if player_results.count("win") == 1 and player_results.count("lose") == 1:
 
             winner_id = player_ids[player_results.index("win")]
-            await self.give_winnings(winner_id)
+            await add_money_unbelievable(winner_id, 0, (self.stake * 2))
             await interaction.channel.send(f"🎉 <@{winner_id}> wygrywa {self.stake * 2} 💰!")
 
             await asyncio.sleep(5)
@@ -37,21 +35,6 @@ class ResultView(discord.ui.View):
             await interaction.channel.send(f"🚨 Brak zgodności wyników! <@{ADMIN_ID}>.")
 
         self.stop()
-
-    async def give_winnings(self, winner_id):
-        url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{winner_id}"
-
-        payload = {
-            "cash": 0,
-            "bank": (self.stake * 2)
-        }
-        headers = {
-            "accept": "application/json",
-            "content-type": "application/json",
-            "Authorization": f"{UNBELIEVABOAT_API_KEY}"
-        }
-
-        requests.patch(url, json=payload, headers=headers)
 
     @discord.ui.button(label="✅ Wygrana", style=discord.ButtonStyle.green)
     async def win_button(self, interaction: discord.Interaction, button: discord.ui.Button):

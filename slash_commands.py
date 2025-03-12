@@ -4,6 +4,8 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 from commands.rocket.match import MatchView, get_user_balance, MatchType
+from commands.shop.remove_rank import check_and_remove_role
+from commands.unbelievable_API.add_money import add_money_unbelievable
 
 GUILD_ID = os.getenv("GUILD")
 
@@ -39,6 +41,23 @@ class SlashCommands(commands.Cog):
         match_view = MatchView(stake, match_type, interaction.user)
         await match_view.send_initial_message(interaction)
         await interaction.followup.send('Match created!', ephemeral=True)
+
+    @app_commands.command(name="return_role", description="Zwróć rangę kupioną w serwerowym sklepie za 50% ceny.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def return_role(self, interaction: discord.Interaction, role: str):
+
+        await interaction.response.defer(ephemeral=True)
+        price = await check_and_remove_role(interaction.user, role)
+
+        if price:
+            if price == -1:
+                await interaction.followup.send(f'Ta ranga nie może zostać zwrócona lub źle napisałeś jej nazwę. Spróbuj ponownie', ephemeral=True)
+            else:
+                await interaction.followup.send(f'Zwrot uznany. Przelewam {price//2} na konto.', ephemeral=True)
+                await add_money_unbelievable(interaction.user.id, 0, (price//2))
+
+        else:
+            await interaction.followup.send('Nie masz tej rangi.', ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
