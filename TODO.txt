@@ -1,2 +1,0 @@
-- zwracanie rang ze sklepu unbelievable za 50% kasy
-- komenda do zmiany statusu (admin only)

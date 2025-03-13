@@ -3,6 +3,8 @@ import os
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
+
+from commands.mod.change_presence import PresenceType, change_presence
 from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
@@ -58,6 +60,19 @@ class SlashCommands(commands.Cog):
 
         else:
             await interaction.followup.send('Nie masz tej rangi.', ephemeral=True)
+
+    @app_commands.command(name='change_presence', description="Change bot's rich presence.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.default_permissions(administrator=True)
+    async def change_presence(self, interaction: Interaction, presence: PresenceType, name: str):
+        await interaction.response.defer(ephemeral=True)
+        result = await change_presence(self.bot, presence, name)
+
+        if result == 1:
+            await interaction.followup.send('Done!', ephemeral=True)
+
+        else:
+            await interaction.followup.send('Coś poszło nie tak. Spróbuj ponownie!', ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
