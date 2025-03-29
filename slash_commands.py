@@ -7,14 +7,18 @@ from discord.ext import commands
 from commands.mod.change_presence import PresenceType, change_presence
 from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
+from commands.unbany.get_history import get_user_history
 from commands.unbelievable_API.add_money import add_money_unbelievable
 
 GUILD_ID = os.getenv("GUILD")
+UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
 
 
 class SlashCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    # -----------------------------------------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -53,10 +57,11 @@ class SlashCommands(commands.Cog):
 
         if price:
             if price == -1:
-                await interaction.followup.send(f'Ta ranga nie może zostać zwrócona lub źle napisałeś jej nazwę. Spróbuj ponownie', ephemeral=True)
+                await interaction.followup.send(
+                    f'Ta ranga nie może zostać zwrócona lub źle napisałeś jej nazwę. Spróbuj ponownie', ephemeral=True)
             else:
-                await interaction.followup.send(f'Zwrot uznany. Przelewam {price//2} na konto.', ephemeral=True)
-                await add_money_unbelievable(interaction.user.id, 0, (price//2))
+                await interaction.followup.send(f'Zwrot uznany. Przelewam {price // 2} na konto.', ephemeral=True)
+                await add_money_unbelievable(interaction.user.id, 0, (price // 2))
 
         else:
             await interaction.followup.send('Nie masz tej rangi.', ephemeral=True)
@@ -73,6 +78,34 @@ class SlashCommands(commands.Cog):
 
         else:
             await interaction.followup.send('Coś poszło nie tak. Spróbuj ponownie!', ephemeral=True)
+
+    # -----------------------------------------------------------------------------------------------
+
+    # @app_commands.command(name='unban', description="Odbanuj na głównym serwerze")
+    # @app_commands.guilds(discord.Object(id=UNBAN_GUILD_ID))
+    # @app_commands.default_permissions(administrator=True)
+    # async def unban(self, interaction: Interaction, user: discord.User):
+    #     ...
+    #
+    # @app_commands.command(name='history', description="Wyświetl historię użytkownika")
+    # @app_commands.guilds(discord.Object(id=UNBAN_GUILD_ID))
+    # @app_commands.default_permissions(administrator=True)
+    # async def history(self, interaction: Interaction, id: str):
+    #     await interaction.response.defer(ephemeral=True)
+    #
+    #     try:
+    #         user_id = int(id)
+    #
+    #     except ValueError:
+    #         await interaction.response.send_message("To nie jest id.", ephemeral=True)
+    #
+    #     user = await self.bot.fetch_user(user_id)
+    #
+    #     if user:
+    #         await get_user_history(user)
+    #
+    #     else:
+    #         await interaction.response.send_message("Nie znaleziono użytkownika.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
