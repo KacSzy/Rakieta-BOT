@@ -9,7 +9,7 @@ ADMIN_ID = 567984269516079104
 
 class ResultView(discord.ui.View):
     def __init__(self, players, stake):
-        super().__init__()
+        super().__init__(timeout=None)
         self.players = players
         self.stake = stake
         self.results = {}
