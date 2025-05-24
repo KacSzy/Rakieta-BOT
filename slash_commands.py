@@ -10,11 +10,14 @@ from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
 
 GUILD_ID = os.getenv("GUILD")
+UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
 
 
 class SlashCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    # -----------------------------------------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -53,10 +56,11 @@ class SlashCommands(commands.Cog):
 
         if price:
             if price == -1:
-                await interaction.followup.send(f'Ta ranga nie może zostać zwrócona lub źle napisałeś jej nazwę. Spróbuj ponownie', ephemeral=True)
+                await interaction.followup.send(
+                    f'Ta ranga nie może zostać zwrócona lub źle napisałeś jej nazwę. Spróbuj ponownie', ephemeral=True)
             else:
-                await interaction.followup.send(f'Zwrot uznany. Przelewam {price//2} na konto.', ephemeral=True)
-                await add_money_unbelievable(interaction.user.id, 0, (price//2))
+                await interaction.followup.send(f'Zwrot uznany. Przelewam {price // 2} na konto.', ephemeral=True)
+                await add_money_unbelievable(interaction.user.id, 0, (price // 2))
 
         else:
             await interaction.followup.send('Nie masz tej rangi.', ephemeral=True)
@@ -73,6 +77,8 @@ class SlashCommands(commands.Cog):
 
         else:
             await interaction.followup.send('Coś poszło nie tak. Spróbuj ponownie!', ephemeral=True)
+
+    # -----------------------------------------------------------------------------------------------
 
 
 async def setup(bot: commands.Bot):
