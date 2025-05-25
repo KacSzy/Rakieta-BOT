@@ -36,7 +36,7 @@ async def on_ready():
     if channel:
         embed = discord.Embed(
             title="🎟 System Ticketów",
-            description="Aby napisać skargę kliknij poniższy przycisk",
+            description="W celu napisania podania, kliknij przycisk poniżej.",
             color=discord.Color.blue()
         )
         await channel.send(embed=embed, view=TicketButton())

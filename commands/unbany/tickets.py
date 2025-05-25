@@ -51,7 +51,7 @@ class CloseTicketButton(ui.View):
     @ui.button(label="Close Ticket", style=ButtonStyle.red, emoji="🔒")
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.defer(ephemeral=True)
-        if interaction.user.id != self.user.id or (self.admin_role not in interaction.user.roles):
+        if self.admin_role not in interaction.user.roles:
             await interaction.followup.send("Nie masz uprawnień do zamknięcia tego ticketa.", ephemeral=True)
             return
 
