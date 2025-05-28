@@ -2,7 +2,7 @@ from enum import Enum
 import discord
 import os
 import requests
-from typing import List, Optional
+from typing import Optional
 
 from commands.rocket.match_result_view import ResultView
 from commands.unbelievable_API.add_money import add_money_unbelievable
@@ -176,6 +176,9 @@ class MatchView(discord.ui.View):
         await thread.send(
             f"Mecz rozpoczęty! Uczestnicy: {participants}\n"
             f"Tryb: {self.match_type.value}"
+        )
+        await thread.send(
+            "⏰ **UWAGA:** Jeżeli przeciwnik nie odpowie w ciągu 15 minut, prosimy o kontakt z administracją <@567984269516079104>."
         )
 
         return thread
