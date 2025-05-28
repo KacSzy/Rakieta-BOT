@@ -5,6 +5,7 @@ import requests
 from typing import List, Optional
 
 from commands.rocket.match_result_view import ResultView
+from commands.unbelievable_API.add_money import add_money_unbelievable
 
 UNBELIEVABOAT_API_KEY = os.getenv("UNBELIEVABOAT_API_KEY")
 GUILD_ID = os.getenv("GUILD")
@@ -44,7 +45,7 @@ def get_user_balance(user_id: int) -> int:
     return 0
 
 
-def take_bets(players: List[discord.Member], stake: int) -> None:
+def take_bet(player: discord.Member, stake: int) -> None:
     """Deduct stake from each player's balance."""
     headers = {
         "accept": "application/json",
@@ -53,9 +54,8 @@ def take_bets(players: List[discord.Member], stake: int) -> None:
     }
     payload = {"cash": 0, "bank": -stake}
 
-    for player in players:
-        url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{player.id}"
-        requests.patch(url, json=payload, headers=headers)
+    url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{player.id}"
+    requests.patch(url, json=payload, headers=headers)
 
 
 class MatchView(discord.ui.View):
@@ -69,8 +69,11 @@ class MatchView(discord.ui.View):
         self.message = None
         self.required_role = get_rank(creator)
 
+        take_bet(self.creator, self.stake)
+
     async def on_timeout(self):
         """Handle view timeout by removing interactive components."""
+        await add_money_unbelievable(self.creator.id, 0, self.stake)
         self.clear_items()
         if self.message:
             await self.message.edit(view=None)
@@ -148,8 +151,9 @@ class MatchView(discord.ui.View):
         self.clear_items()
         await self.message.edit(view=self)
 
-        # Take bets from players
-        take_bets(self.players, self.stake)
+        # Take a bet from the player
+        second_player = self.players[1]
+        take_bet(second_player, self.stake)
 
         # Add result submission view
         view = ResultView(self.players, self.stake)
@@ -162,7 +166,12 @@ class MatchView(discord.ui.View):
             auto_archive_duration=1440
         )
 
-        # Send initial thread message
+        await thread.set_permissions(thread.guild.default_role, send_messages=False)
+
+        for player in self.players:
+            await thread.set_permissions(player, send_messages=True)
+
+        # Send info message
         participants = ', '.join(player.mention for player in self.players)
         await thread.send(
             f"Mecz rozpoczęty! Uczestnicy: {participants}\n"
