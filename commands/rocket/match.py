@@ -166,19 +166,15 @@ class MatchView(discord.ui.View):
             auto_archive_duration=1440
         )
 
-        await thread.set_permissions(thread.guild.default_role, send_messages=False)
-
-        for player in self.players:
-            await thread.set_permissions(player, send_messages=True)
-
         # Send info message
         participants = ', '.join(player.mention for player in self.players)
-        await thread.send(
+        info_message = (
             f"Mecz rozpoczęty! Uczestnicy: {participants}\n"
-            f"Tryb: {self.match_type.value}"
+            f"Tryb: {self.match_type.value}\n\n"
+            f"⏰ **UWAGA:** Jeżeli przeciwnik nie odpowie w ciągu 15 minut, "
+            f"prosimy o kontakt z administracją <@{567984269516079104}>."
         )
-        await thread.send(
-            "⏰ **UWAGA:** Jeżeli przeciwnik nie odpowie w ciągu 15 minut, prosimy o kontakt z administracją <@567984269516079104>."
-        )
+
+        await thread.send(info_message)
 
         return thread
