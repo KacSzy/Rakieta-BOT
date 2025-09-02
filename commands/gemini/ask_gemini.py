@@ -24,7 +24,7 @@ async def handle_gemini_command(interaction: discord.Interaction, question: str)
             await interaction.followup.send("Odpowiedź jest zbyt długa, aby ją wyświetlić.")
 
     except Exception as e:
-        await interaction.followup.send(f"Error: {str(e)}")
+        await interaction.followup.send(f"Error. Try again.")
 
 
 def _call_gemini_api(prompt):
@@ -63,4 +63,4 @@ def _call_gemini_api(prompt):
         except (KeyError, IndexError):
             return "Received an unexpected response format from Gemini API."
     else:
-        return f"Error: {response.status_code} - {response.text}"
+        return f"Error: {response.status_code}"
