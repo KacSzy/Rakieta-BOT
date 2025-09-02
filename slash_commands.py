@@ -4,6 +4,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from commands.gemini.ask_gemini import handle_gemini_command
 from commands.mod.change_presence import PresenceType, change_presence
 from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
@@ -77,6 +78,13 @@ class SlashCommands(commands.Cog):
 
         else:
             await interaction.followup.send('Coś poszło nie tak. Spróbuj ponownie!', ephemeral=True)
+
+    @app_commands.command(name='ask', description='Zadaj pytanie sztucznej inteligencji.')
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def ask_ai(self, interaction: Interaction, question: str):
+        await interaction.response.defer()
+        await handle_gemini_command(interaction, question)
+
 
     # -----------------------------------------------------------------------------------------------
 
