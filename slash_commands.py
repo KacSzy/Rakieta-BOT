@@ -79,6 +79,23 @@ class SlashCommands(commands.Cog):
         else:
             await interaction.followup.send('Coś poszło nie tak. Spróbuj ponownie!', ephemeral=True)
 
+    @app_commands.command(name='clear_invites',
+                          description="Usuwa wszystkie zaproszenia użyte < 5 razy (z wyjątkiem Edka).")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.default_permissions(administrator=True)
+    async def clear_invites(self, interaction: Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        invites = await guild.invites()
+
+        for invite in invites:
+            if invite.inviter.id != 436554151040778240:  # Edek's ID
+
+                if invite.uses < 5:
+                    await invite.delete()
+
+        await interaction.followup.send('Wszystkie zaproszenia zostały usunięte.', ephemeral=True)
+
     @app_commands.command(name='ask', description='Zadaj pytanie sztucznej inteligencji.')
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def ask_ai(self, interaction: Interaction, question: str):
