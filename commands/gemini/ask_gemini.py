@@ -15,7 +15,7 @@ async def handle_gemini_command(interaction: discord.Interaction, question: str)
         gemini_response = _call_gemini_api(question + '(max 1500 znakow)')
 
         # Format the complete response with question and answer
-        complete_response = f"**Pytanie:**\n{question}\n\n**Odpowiedź:**\n{gemini_response}"
+        complete_response = f"**{question}**\n{gemini_response}"
 
         # Discord's character limit
         if len(complete_response) <= 2000:
