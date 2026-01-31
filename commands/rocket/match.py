@@ -220,7 +220,7 @@ class MatchView(discord.ui.View):
 
         # Add result submission view
         # Passing teams to ResultView
-        view = ResultView(self.blue_team, self.orange_team, self.stake)
+        view = ResultView(self.blue_team, self.orange_team, self.stake, self.team_size)
         await thread.send("🔹 Potwierdź wynik meczu:", view=view)
 
     async def _create_match_thread(self):

@@ -2,14 +2,16 @@ import asyncio
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import ADMIN_USER_ID
+from database import update_match_history
 
 
 class ResultView(discord.ui.View):
-    def __init__(self, blue_team, orange_team, stake):
+    def __init__(self, blue_team, orange_team, stake, team_size):
         super().__init__(timeout=None)
         self.blue_team = blue_team
         self.orange_team = orange_team
         self.stake = stake
+        self.team_size = team_size
         # Track confirmed result for each team
         self.blue_vote = None
         self.orange_vote = None
@@ -37,12 +39,24 @@ class ResultView(discord.ui.View):
 
     async def _handle_win(self, interaction: discord.Interaction, winning_team_name):
         """Process payout for the winning team."""
-        winning_team = self.blue_team if winning_team_name == "blue" else self.orange_team
+        if winning_team_name == "blue":
+            winning_team = self.blue_team
+            losing_team = self.orange_team
+        else:
+            winning_team = self.orange_team
+            losing_team = self.blue_team
 
         payout_list = []
+
+        # Process winners
         for player in winning_team:
             await add_money_unbelievable(player.id, 0, (self.stake * 2))
+            await update_match_history(player.id, self.team_size, is_win=True)
             payout_list.append(player.mention)
+
+        # Process losers
+        for player in losing_team:
+            await update_match_history(player.id, self.team_size, is_win=False)
 
         winners_str = ", ".join(payout_list)
         await interaction.channel.send(f"🎉 Zwycięzcy: {winners_str} zgarniają po {self.stake * 2} 💰!")
