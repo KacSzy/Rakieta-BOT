@@ -2,7 +2,7 @@ from enum import Enum
 import discord
 import os
 import aiohttp
-from typing import Optional
+from typing import Optional, List
 
 from commands.rocket.match_result_view import ResultView
 from commands.unbelievable_API.add_money import add_money_unbelievable
@@ -65,27 +65,32 @@ async def take_bet(player: discord.Member, stake: int) -> None:
 
 
 class MatchView(discord.ui.View):
-    def __init__(self, stake: int, match_type: MatchType, creator: discord.Member):
+    def __init__(self, stake: int, match_type: MatchType, creator: discord.Member, team_size: int = 1):
         super().__init__(timeout=MATCH_TIMEOUT_SECONDS)
         self.stake = stake
         self.match_type = match_type
         self.creator = creator
-        self.players = [creator]
-        self.max_players = 2
+        self.team_size = team_size
+        self.blue_team: List[discord.Member] = [creator]
+        self.orange_team: List[discord.Member] = []
         self.message = None
         self.required_role = get_rank(creator)
-        # Note: take_bet moved to send_initial_message to allow async execution
+        # Note: take_bet is called in send_initial_message for the creator
 
     async def on_timeout(self):
-        """Handle view timeout by removing interactive components."""
-        await add_money_unbelievable(self.creator.id, 0, self.stake)
+        """Handle view timeout by refunding everyone and removing components."""
+        # Refund everyone currently in the teams
+        all_players = self.blue_team + self.orange_team
+        for player in all_players:
+            await add_money_unbelievable(player.id, 0, self.stake)
+
         self.clear_items()
         if self.message:
-            await self.message.edit(view=None)
+            await self.message.edit(content="⏰ Mecz anulowany (timeout). Środki zwrócone.", view=None, embed=None)
 
     async def send_initial_message(self, interaction: discord.Interaction):
         """Send the initial match invitation message."""
-        # Take the bet from the creator here, as this is the first async entry point
+        # Take the bet from the creator here
         await take_bet(self.creator, self.stake)
 
         embed = self._create_match_embed()
@@ -94,8 +99,10 @@ class MatchView(discord.ui.View):
 
     def _create_match_embed(self) -> discord.Embed:
         """Create the match information embed."""
+        match_title = f"🔹 {self.team_size}v{self.team_size} MATCH 🔹"
+
         embed = discord.Embed(
-            title=f"🔹 1V1 MATCH 🔹",
+            title=match_title,
             description=(
                 f"**Stawka:** {self.stake} 💰\n"
                 f"**Tryb:** {self.match_type.value}\n"
@@ -104,17 +111,30 @@ class MatchView(discord.ui.View):
             ),
             color=discord.Color.blue()
         )
-        embed.set_footer(text="Kliknij przycisk, aby dołączyć!")
+
+        blue_mentions = "\n".join([p.mention for p in self.blue_team]) or "Oczekiwanie..."
+        orange_mentions = "\n".join([p.mention for p in self.orange_team]) or "Oczekiwanie..."
+
+        embed.add_field(name=f"🔵 Blue Team ({len(self.blue_team)}/{self.team_size})", value=blue_mentions, inline=True)
+        embed.add_field(name=f"🟠 Orange Team ({len(self.orange_team)}/{self.team_size})", value=orange_mentions, inline=True)
+
+        embed.set_footer(text="Wybierz drużynę, aby dołączyć!")
         return embed
 
-    @discord.ui.button(label="Dołącz", style=discord.ButtonStyle.green, custom_id="join_match")
-    async def join_match(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Handle join match button click."""
+    async def _handle_join(self, interaction: discord.Interaction, team_color: str):
+        """Generic handler for joining a team."""
         user = interaction.user
 
-        # Check if user is already in the match
-        if user in self.players:
+        # Check if user is already in any team
+        if user in self.blue_team or user in self.orange_team:
             await interaction.response.send_message("Już jesteś w meczu!", ephemeral=True)
+            return
+
+        target_team = self.blue_team if team_color == "blue" else self.orange_team
+
+        # Check if team is full
+        if len(target_team) >= self.team_size:
+            await interaction.response.send_message("Ta drużyna jest już pełna!", ephemeral=True)
             return
 
         # Validate rank requirements
@@ -128,13 +148,52 @@ class MatchView(discord.ui.View):
             await interaction.response.send_message("Masz za mało kasy!", ephemeral=True)
             return
 
-        # Add user to players and update
-        self.players.append(user)
-        await interaction.response.send_message(f"{user.mention} dołączył do meczu!", ephemeral=True)
+        # Deduct stake
+        await take_bet(user, self.stake)
 
-        # Start match if max players reached
-        if len(self.players) == self.max_players:
+        # Add to team
+        target_team.append(user)
+
+        await interaction.response.send_message(f"Dołączyłeś do {team_color.capitalize()} Team!", ephemeral=True)
+        await self._update_message()
+
+        # Check if match is ready
+        if len(self.blue_team) == self.team_size and len(self.orange_team) == self.team_size:
             await self.start_match()
+
+    @discord.ui.button(label="Dołącz do Blue", style=discord.ButtonStyle.primary, custom_id="join_blue")
+    async def join_blue(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_join(interaction, "blue")
+
+    @discord.ui.button(label="Dołącz do Orange", style=discord.ButtonStyle.danger, custom_id="join_orange")
+    async def join_orange(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_join(interaction, "orange")
+
+    @discord.ui.button(label="Opuść", style=discord.ButtonStyle.secondary, custom_id="leave_match")
+    async def leave_match(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+
+        if user not in self.blue_team and user not in self.orange_team:
+            await interaction.response.send_message("Nie jesteś w tym meczu.", ephemeral=True)
+            return
+
+        # Remove user and refund
+        if user in self.blue_team:
+            self.blue_team.remove(user)
+        elif user in self.orange_team:
+            self.orange_team.remove(user)
+
+        await add_money_unbelievable(user.id, 0, self.stake)
+        await interaction.response.send_message("Opuściłeś mecz. Środki zwrócone.", ephemeral=True)
+
+        # If everyone left, maybe cancel? But for now just update embed.
+        await self._update_message()
+
+    async def _update_message(self):
+        """Update the match embed with current teams."""
+        if self.message:
+            embed = self._create_match_embed()
+            await self.message.edit(embed=embed)
 
     def _validate_user_rank(self, user: discord.Member) -> bool:
         """Check if user's rank meets the requirements."""
@@ -155,34 +214,36 @@ class MatchView(discord.ui.View):
         # Create discussion thread
         thread = await self._create_match_thread()
 
-        # Remove join button
+        # Remove buttons/view from invitation message
         self.clear_items()
-        await self.message.edit(view=self)
-
-        # Take a bet from the player
-        second_player = self.players[1]
-        await take_bet(second_player, self.stake)
+        await self.message.edit(view=None) # Or keep view with disabled buttons? Removing is cleaner.
 
         # Add result submission view
-        view = ResultView(self.players, self.stake)
+        # Passing teams to ResultView
+        view = ResultView(self.blue_team, self.orange_team, self.stake)
         await thread.send("🔹 Potwierdź wynik meczu:", view=view)
 
     async def _create_match_thread(self):
         """Create a thread for match discussion."""
         thread = await self.message.create_thread(
-            name=f'Mecz 1V1 - {self.creator.name}',
+            name=f'Mecz {self.team_size}v{self.team_size} - {self.creator.name}',
             auto_archive_duration=1440
         )
 
         # Send info message
-        participants = ', '.join(player.mention for player in self.players)
+        blue_mentions = ', '.join(p.mention for p in self.blue_team)
+        orange_mentions = ', '.join(p.mention for p in self.orange_team)
+
         info_message = (
-            f"Mecz rozpoczęty! Uczestnicy: {participants}\n"
+            f"Mecz rozpoczęty!\n"
+            f"🔵 **Blue Team:** {blue_mentions}\n"
+            f"🟠 **Orange Team:** {orange_mentions}\n"
             f"Tryb: {self.match_type.value}\n\n"
             f"⏰ **UWAGA:** Jeżeli przeciwnik nie odpowie w ciągu 15 minut, "
             f"prosimy o kontakt z administracją <@{ADMIN_USER_ID}>."
         )
 
         await thread.send(info_message)
+        # Ping players? Mentions in message should ping them.
 
         return thread

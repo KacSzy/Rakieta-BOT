@@ -30,9 +30,19 @@ class SlashCommands(commands.Cog):
     async def ping(self, interaction: Interaction):
         await interaction.response.send_message(f'{round(self.bot.latency * 1000)}ms', ephemeral=True)
 
-    @app_commands.command(name="match_1v1", description="Rozpocznij mecz 1v1 o wybraną stawkę.")
+    @app_commands.command(name="match", description="Rozpocznij mecz (1v1, 2v2, 3v3) o wybraną stawkę.")
+    @app_commands.describe(
+        stake="Stawka meczu (min. 200)",
+        match_type="Tryb gry (BO3 lub One Game)",
+        team_size="Rozmiar drużyny (1v1, 2v2, 3v3)"
+    )
+    @app_commands.choices(team_size=[
+        app_commands.Choice(name="1v1", value=1),
+        app_commands.Choice(name="2v2", value=2),
+        app_commands.Choice(name="3v3", value=3)
+    ])
     @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def match_start_1s(self, interaction: discord.Interaction, stake: int, match_type: MatchType):
+    async def match_start(self, interaction: discord.Interaction, stake: int, match_type: MatchType, team_size: int = 1):
         if stake < 200:
             await interaction.response.send_message("Minimalna stawka to 200.", ephemeral=True)
             return
@@ -45,9 +55,9 @@ class SlashCommands(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        match_view = MatchView(stake, match_type, interaction.user)
+        match_view = MatchView(stake, match_type, interaction.user, team_size)
         await match_view.send_initial_message(interaction)
-        await interaction.followup.send('Match created!', ephemeral=True)
+        await interaction.followup.send(f'Utworzono mecz {team_size}v{team_size}!', ephemeral=True)
 
     @app_commands.command(name="return_role", description="Zwróć rangę kupioną w serwerowym sklepie za 50% ceny.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
