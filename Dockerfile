@@ -1,11 +1,10 @@
-FROM python:3.12
-FROM gorialis/discord.py
+FROM python:3.12-slim
 
-RUN mkdir -p /usr/src/bot
 WORKDIR /usr/src/bot
 
-COPY . .
-
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
 
 CMD [ "python3", "discord_bot.py" ]

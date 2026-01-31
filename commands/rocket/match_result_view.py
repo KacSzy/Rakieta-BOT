@@ -1,8 +1,7 @@
 import asyncio
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
-
-ADMIN_ID = 567984269516079104
+from const import ADMIN_USER_ID
 
 
 class ResultView(discord.ui.View):
@@ -23,7 +22,7 @@ class ResultView(discord.ui.View):
         if player_results.count("win") == 1 and player_results.count("lose") == 1:
             await self._handle_match_agreement(interaction, player_ids, player_results)
         else:
-            await interaction.channel.send(f"🚨 Brak zgodności wyników! <@{ADMIN_ID}>.")
+            await interaction.channel.send(f"🚨 Brak zgodności wyników! <@{ADMIN_USER_ID}>.")
 
         self.stop()
 
@@ -66,7 +65,7 @@ class ResultView(discord.ui.View):
     @discord.ui.button(label="x", style=discord.ButtonStyle.grey)
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle thread deletion button (admin only)."""
-        if interaction.user.id != ADMIN_ID:
+        if interaction.user.id != ADMIN_USER_ID:
             await interaction.response.send_message("Nie masz uprawnień!", ephemeral=True)
             return
 

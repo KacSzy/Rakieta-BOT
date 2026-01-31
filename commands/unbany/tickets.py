@@ -3,10 +3,7 @@ from typing import Final
 
 import discord
 from discord import ui, ButtonStyle
-
-ADMIN_ROLE_ID: Final[int] = 779479259487928360
-CATEGORY_ID: Final[int] = 1350532455752405074
-
+from const import TICKET_ADMIN_ROLE_ID, TICKET_CATEGORY_ID
 
 class TicketButton(ui.View):
     def __init__(self):
@@ -17,7 +14,7 @@ class TicketButton(ui.View):
         guild = interaction.guild
         user = interaction.user
 
-        admin_role = guild.get_role(ADMIN_ROLE_ID)
+        admin_role = guild.get_role(TICKET_ADMIN_ROLE_ID)
 
         settings_overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -25,7 +22,7 @@ class TicketButton(ui.View):
             admin_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
-        category = guild.get_channel(CATEGORY_ID)
+        category = guild.get_channel(TICKET_CATEGORY_ID)
         ticket_channel = await guild.create_text_channel(name=f"ticket-{user.name}", category=category,
                                                          overwrites=settings_overwrites)
 

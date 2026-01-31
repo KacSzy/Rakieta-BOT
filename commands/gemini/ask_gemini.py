@@ -1,5 +1,5 @@
 import os
-import requests
+import aiohttp
 import discord
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -12,7 +12,7 @@ async def handle_gemini_command(interaction: discord.Interaction, question: str)
 
     # Call Gemini API
     try:
-        gemini_response = _call_gemini_api(question + '(max 1500 znakow)')
+        gemini_response = await _call_gemini_api(question + '(max 1500 znakow)')
 
         # Format the complete response with question and answer
         complete_response = f"**{question}**\n{gemini_response}"
@@ -27,7 +27,7 @@ async def handle_gemini_command(interaction: discord.Interaction, question: str)
         await interaction.followup.send(f"Error. Try again.")
 
 
-def _call_gemini_api(prompt):
+async def _call_gemini_api(prompt):
     """
     Call the Gemini API with the provided prompt
     """
@@ -49,18 +49,14 @@ def _call_gemini_api(prompt):
         ]
     }
 
-    response = requests.post(
-        GEMINI_API_URL,
-        headers=headers,
-        json=data
-    )
-
-    if response.status_code == 200:
-        result = response.json()
-        # Extract the text from the response
-        try:
-            return result["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError):
-            return "Received an unexpected response format from Gemini API."
-    else:
-        return f"Error: {response.status_code}"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(GEMINI_API_URL, headers=headers, json=data) as response:
+            if response.status == 200:
+                result = await response.json()
+                # Extract the text from the response
+                try:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError):
+                    return "Received an unexpected response format from Gemini API."
+            else:
+                return f"Error: {response.status}"

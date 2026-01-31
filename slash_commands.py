@@ -9,6 +9,7 @@ from commands.mod.change_presence import PresenceType, change_presence
 from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
+from const import EDEK_USER_ID
 
 GUILD_ID = os.getenv("GUILD")
 UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
@@ -36,7 +37,7 @@ class SlashCommands(commands.Cog):
             await interaction.response.send_message("Minimalna stawka to 200.", ephemeral=True)
             return
 
-        user_balance = get_user_balance(interaction.user.id)
+        user_balance = await get_user_balance(interaction.user.id)
 
         if user_balance < stake:
             await interaction.response.send_message("Masz za mało kasy!", ephemeral=True)
@@ -89,7 +90,7 @@ class SlashCommands(commands.Cog):
         invites = await guild.invites()
 
         for invite in invites:
-            if invite.inviter.id != 436554151040778240:  # Edek's ID
+            if invite.inviter.id != EDEK_USER_ID:
 
                 if invite.uses < 5:
                     await invite.delete()

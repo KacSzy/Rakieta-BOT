@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from const import BLOCKED_WORDS, LOG_CHANNEL_ID
+from const import BLOCKED_WORDS, LOG_CHANNEL_ID, ADMIN_USER_ID
 
 
 class Events(commands.Cog):
@@ -57,7 +57,7 @@ class Events(commands.Cog):
             "W celu odwołania się dołącz na [serwer](<https://discord.com/invite/v4fQDbAZQw>) i napisz podanie."
         )
         await message.author.send(
-            "Jeżeli z jakiegoś powodu nie możesz dołączyć, wyślij wiadomość do <@567984269516079104>"
+            f"Jeżeli z jakiegoś powodu nie możesz dołączyć, wyślij wiadomość do <@{ADMIN_USER_ID}>"
         )
 
 

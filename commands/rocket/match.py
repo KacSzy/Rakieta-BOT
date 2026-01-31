@@ -1,15 +1,15 @@
 from enum import Enum
 import discord
 import os
-import requests
+import aiohttp
 from typing import Optional
 
 from commands.rocket.match_result_view import ResultView
 from commands.unbelievable_API.add_money import add_money_unbelievable
+from const import MATCH_CHANNEL_ID, ADMIN_USER_ID
 
 UNBELIEVABOAT_API_KEY = os.getenv("UNBELIEVABOAT_API_KEY")
 GUILD_ID = os.getenv("GUILD")
-MATCH_CHANNEL_ID = 1342099575732965376
 MATCH_TIMEOUT_SECONDS = 1800  # 30 min
 
 RANK_ROLES = ["Brąz", "Srebro", "Złoto", "Platyna", "Diament", "Champion", "GC1", "GC2", "GC3", "SSL"]
@@ -34,18 +34,20 @@ def get_rank(member: discord.Member) -> Optional[str]:
     return None
 
 
-def get_user_balance(user_id: int) -> int:
+async def get_user_balance(user_id: int) -> int:
     """Fetch user balance from UnbelievaBoat API."""
     url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{user_id}"
     headers = {"accept": "application/json", "Authorization": f"{UNBELIEVABOAT_API_KEY}"}
-    response = requests.get(url, headers=headers)
 
-    if response.status_code == 200:
-        return response.json().get("bank", 0)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data.get("bank", 0)
     return 0
 
 
-def take_bet(player: discord.Member, stake: int) -> None:
+async def take_bet(player: discord.Member, stake: int) -> None:
     """Deduct stake from each player's balance."""
     headers = {
         "accept": "application/json",
@@ -55,7 +57,11 @@ def take_bet(player: discord.Member, stake: int) -> None:
     payload = {"cash": 0, "bank": -stake}
 
     url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{player.id}"
-    requests.patch(url, json=payload, headers=headers)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.patch(url, json=payload, headers=headers) as response:
+             # Consume the response
+            await response.text()
 
 
 class MatchView(discord.ui.View):
@@ -68,8 +74,7 @@ class MatchView(discord.ui.View):
         self.max_players = 2
         self.message = None
         self.required_role = get_rank(creator)
-
-        take_bet(self.creator, self.stake)
+        # Note: take_bet moved to send_initial_message to allow async execution
 
     async def on_timeout(self):
         """Handle view timeout by removing interactive components."""
@@ -80,6 +85,9 @@ class MatchView(discord.ui.View):
 
     async def send_initial_message(self, interaction: discord.Interaction):
         """Send the initial match invitation message."""
+        # Take the bet from the creator here, as this is the first async entry point
+        await take_bet(self.creator, self.stake)
+
         embed = self._create_match_embed()
         channel = interaction.guild.get_channel(MATCH_CHANNEL_ID)
         self.message = await channel.send(embed=embed, view=self)
@@ -116,7 +124,7 @@ class MatchView(discord.ui.View):
             return
 
         # Check if user has enough balance
-        if not self._validate_user_balance(user):
+        if not await self._validate_user_balance(user):
             await interaction.response.send_message("Masz za mało kasy!", ephemeral=True)
             return
 
@@ -137,9 +145,9 @@ class MatchView(discord.ui.View):
         else:
             return user_rank == self.required_role
 
-    def _validate_user_balance(self, user: discord.Member) -> bool:
+    async def _validate_user_balance(self, user: discord.Member) -> bool:
         """Check if user has sufficient balance for the match stake."""
-        user_balance = get_user_balance(user.id)
+        user_balance = await get_user_balance(user.id)
         return user_balance >= self.stake
 
     async def start_match(self):
@@ -153,7 +161,7 @@ class MatchView(discord.ui.View):
 
         # Take a bet from the player
         second_player = self.players[1]
-        take_bet(second_player, self.stake)
+        await take_bet(second_player, self.stake)
 
         # Add result submission view
         view = ResultView(self.players, self.stake)
@@ -172,7 +180,7 @@ class MatchView(discord.ui.View):
             f"Mecz rozpoczęty! Uczestnicy: {participants}\n"
             f"Tryb: {self.match_type.value}\n\n"
             f"⏰ **UWAGA:** Jeżeli przeciwnik nie odpowie w ciągu 15 minut, "
-            f"prosimy o kontakt z administracją <@{567984269516079104}>."
+            f"prosimy o kontakt z administracją <@{ADMIN_USER_ID}>."
         )
 
         await thread.send(info_message)

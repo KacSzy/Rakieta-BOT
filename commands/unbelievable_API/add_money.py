@@ -1,7 +1,6 @@
 import os
-
+import aiohttp
 from dotenv import load_dotenv
-import requests
 
 load_dotenv()
 
@@ -11,7 +10,7 @@ UNBELIEVABOAT_API_KEY = os.getenv("UNBELIEVABOAT_API_KEY")
 
 async def add_money_unbelievable(user_id: int, cash: int, bank: int) -> None:
     """
-    Adds or deletes money from user's account.
+    Adds or deletes money from user's account asynchronously.
 
     :param user_id: Discord user's ID
     :param cash: Value to add (if >0) or remove (<0) to hand
@@ -29,4 +28,7 @@ async def add_money_unbelievable(user_id: int, cash: int, bank: int) -> None:
         "Authorization": f"{UNBELIEVABOAT_API_KEY}"
     }
 
-    requests.patch(url, json=payload, headers=headers)
+    async with aiohttp.ClientSession() as session:
+        async with session.patch(url, json=payload, headers=headers) as response:
+            if response.status != 200:
+                print(f"Failed to update balance for {user_id}: {response.status}")
