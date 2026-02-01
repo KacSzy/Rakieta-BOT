@@ -196,6 +196,13 @@ async def init_system_tables():
             unlocked_at INTEGER,
             UNIQUE(user_id, achievement_id)
         );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS RoleHolders (
+            team_size INTEGER,
+            user_id TEXT,
+            PRIMARY KEY(team_size, user_id)
+        );
         """
     ]
 
@@ -413,6 +420,46 @@ async def get_user_achievements(user_id: int):
     except Exception as e:
         print(f"Error fetching achievements: {e}")
         return []
+
+async def get_role_holders(team_size: int) -> List[int]:
+    """
+    Fetches the list of user IDs who currently hold the leader role for a given team size.
+    """
+    url, token = get_db_config()
+    if not url: return []
+
+    query = "SELECT user_id FROM RoleHolders WHERE team_size = ?"
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query, [team_size])
+            # Return as list of ints
+            return [int(row[0]) for row in res.rows]
+    except Exception as e:
+        print(f"Error fetching role holders for {team_size}v{team_size}: {e}")
+        return []
+
+async def update_role_holders(team_size: int, user_ids: List[int]):
+    """
+    Updates the list of role holders for a given team size.
+    Replaces existing entries.
+    """
+    url, token = get_db_config()
+    if not url: return
+
+    delete_query = "DELETE FROM RoleHolders WHERE team_size = ?"
+    insert_query = "INSERT INTO RoleHolders (team_size, user_id) VALUES (?, ?)"
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            # Delete old
+            await client.execute(delete_query, [team_size])
+
+            # Insert new
+            for uid in user_ids:
+                await client.execute(insert_query, [team_size, str(uid)])
+    except Exception as e:
+        print(f"Error updating role holders for {team_size}v{team_size}: {e}")
 
 # --- Existing functions preserved below (get_leaderboard_data, get_all_winners, bonus stuff) ---
 

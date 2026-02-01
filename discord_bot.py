@@ -20,8 +20,9 @@ GUILD = discord.Object(id=GUILD_ID)
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.members = True
 
-bot = commands.Bot(command_prefix="_", intents=intents)
+bot = commands.Bot(command_prefix="_", intents=intents, chunk_guilds_at_startup=False)
 
 
 @bot.event

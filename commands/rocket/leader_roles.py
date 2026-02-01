@@ -1,6 +1,6 @@
 import discord
 from const import ROLE_ID_1V1_LEADER, ROLE_ID_2V2_LEADER, ROLE_ID_3V3_LEADER
-from database import get_all_winners
+from database import get_all_winners, get_role_holders, update_role_holders
 
 async def update_leader_role(guild: discord.Guild, team_size: int):
     """
@@ -24,47 +24,40 @@ async def update_leader_role(guild: discord.Guild, team_size: int):
         return
 
     # Fetch all winners sorted by Wins DESC, Score DESC
-    # rows are tuples: (user_id, wins, losses, score)
     all_winners = await get_all_winners(team_size)
+
+    # If no winners exist, clear everything
     if not all_winners:
-        # No winners at all? Remove role from everyone
-        for member in role.members:
+        # Try to clear from DB holders
+        old_holders = await get_role_holders(team_size)
+        for uid in old_holders:
             try:
-                await member.remove_roles(role)
+                member = await guild.fetch_member(uid)
+                if role in member.roles:
+                    await member.remove_roles(role)
+            except discord.NotFound:
+                pass
             except Exception as e:
-                print(f"Failed to remove role from {member}: {e}")
+                print(f"Failed to remove role from {uid}: {e}")
+
+        await update_role_holders(team_size, [])
         return
 
-    # Determine max wins
+    # 1. Determine New Leaders
     max_wins = all_winners[0][1]
-
-    # Identify candidates: everyone with max_wins
     candidates = [row for row in all_winners if row[1] == max_wins]
     candidate_ids = [int(c[0]) for c in candidates]
 
-    # Identify incumbents (current role holders)
-    # We only care about incumbents who are ALSO candidates (still have max wins)
-    # because if they lost max wins status, they lose role anyway.
-    incumbent_ids = [m.id for m in role.members]
+    # Get incumbents from DB (persistent state)
+    incumbent_ids = await get_role_holders(team_size)
     valid_incumbents = [uid for uid in candidate_ids if uid in incumbent_ids]
 
     final_leader_ids = []
 
-    # Logic:
-    # 1. If number of candidates <= max_leaders, ALL candidates get the role.
     if len(candidates) <= max_leaders:
         final_leader_ids = candidate_ids
     else:
-        # 2. If number of candidates > max_leaders, we must select subset.
-        # Priority: Incumbents -> Highest Score.
-
-        # Step A: Keep valid incumbents (up to max_leaders)
-        # Assuming incumbents are already sorted by Score DESC in `candidates` list?
-        # `get_all_winners` returns sorted by Wins DESC, Score DESC.
-        # But `candidates` respects that order.
-
-        # Actually, "Incumbents first".
-        # Let's take valid incumbents.
+        # Priority: Incumbents -> Highest Score
         leaders_selected = []
 
         # Add valid incumbents first
@@ -72,38 +65,74 @@ async def update_leader_role(guild: discord.Guild, team_size: int):
             if len(leaders_selected) < max_leaders:
                 leaders_selected.append(uid)
 
-        # Step B: If spots remaining, fill with remaining candidates (highest score first)
-        # `candidates` is already sorted by Score DESC because of SQL `ORDER BY ..., score DESC`
+        # Fill with remaining candidates (sorted by Score DESC)
         for row in candidates:
             if len(leaders_selected) >= max_leaders:
                 break
-            uid = row[0]
+            uid = int(row[0])
             if uid not in leaders_selected:
                 leaders_selected.append(uid)
 
         final_leader_ids = leaders_selected
 
-    # Apply changes
-    # 1. Remove role from those who have it but are NOT in final_leader_ids
-    for member in role.members:
-        if member.id not in final_leader_ids:
-            try:
-                await member.remove_roles(role)
-            except Exception as e:
-                print(f"Failed to remove role from {member}: {e}")
+    # 2. Identify Users to Remove Role From
+    users_to_remove = set()
 
-    # 2. Add role to final_leader_ids who don't have it
-    for uid in final_leader_ids:
-        member = guild.get_member(uid)
-        if not member:
+    # A. Users who were in DB but lost the spot
+    for uid in incumbent_ids:
+        if uid not in final_leader_ids:
+            users_to_remove.add(uid)
+
+    # B. Safety Sweep (Top 25)
+    # Check top players to see if they hold the role erroneously (e.g. from before DB tracking)
+    # This fixes the bug where "previous person dropped to top 2 but kept role" if DB was empty/desync.
+    top_candidates = all_winners[:25]
+    for row in top_candidates:
+        uid = int(row[0])
+        if uid not in final_leader_ids:
+            # We must check if they have the role.
+            # We can't rely on users_to_remove logic alone if they weren't in DB.
             try:
+                member = guild.get_member(uid)
+                if not member:
+                    member = await guild.fetch_member(uid)
+
+                if role in member.roles:
+                    users_to_remove.add(uid)
+            except discord.NotFound:
+                pass # User left server
+            except Exception as e:
+                print(f"Safety sweep check failed for {uid}: {e}")
+
+    # Execute Removal
+    for uid in users_to_remove:
+        try:
+            member = guild.get_member(uid)
+            if not member:
                 member = await guild.fetch_member(uid)
-            except Exception as e:
-                print(f"Failed to fetch member {uid}: {e}")
-                continue
 
-        if member and role not in member.roles:
-            try:
+            # Double check (redundant but safe)
+            if role in member.roles:
+                await member.remove_roles(role)
+        except discord.NotFound:
+            pass
+        except Exception as e:
+            print(f"Failed to remove role from {uid}: {e}")
+
+    # 3. Identify Users to Add Role To
+    # We iterate final_leader_ids and ensure they have the role.
+    for uid in final_leader_ids:
+        try:
+            member = guild.get_member(uid)
+            if not member:
+                member = await guild.fetch_member(uid)
+
+            if role not in member.roles:
                 await member.add_roles(role)
-            except Exception as e:
-                print(f"Failed to add role to {member}: {e}")
+        except discord.NotFound:
+            print(f"Leader {uid} not found in guild.")
+        except Exception as e:
+            print(f"Failed to add role to {uid}: {e}")
+
+    # 4. Update DB State
+    await update_role_holders(team_size, final_leader_ids)
