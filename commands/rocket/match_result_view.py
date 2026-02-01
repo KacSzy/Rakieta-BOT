@@ -167,10 +167,8 @@ class ResultView(discord.ui.View):
         # Determine Teams
         if winning_team_name == "blue":
             winning_team = self.blue_team
-            losing_team = self.orange_team
         else:
             winning_team = self.orange_team
-            losing_team = self.blue_team
 
         # Calculate Totals
         total_blue_goals = sum(g[0] for g in games)
@@ -179,6 +177,7 @@ class ResultView(discord.ui.View):
         # Prepare for Payout
         from commands.rocket.match import get_user_balance
         log_data = []
+        payout_list = []
 
         # Bonus Logic
         bonus_awarded = False
@@ -199,9 +198,6 @@ class ResultView(discord.ui.View):
 
         total_payout = (self.stake * 2) + bonus_amount
 
-        payout_list = []
-        log_data = []
-
         # 1. Update DB: Save Match Record first
         # Participants Data
         participants_data = []
@@ -218,24 +214,6 @@ class ResultView(discord.ui.View):
                 'result': 'WIN' if winning_team_name == 'orange' else 'LOSS'
             })
 
-        # Process winners
-        for player in winning_team:
-            current_balance = await get_user_balance(player.id)
-            await add_money_unbelievable(player.id, 0, total_payout)
-            await update_match_history(player.id, self.team_size, is_win=True)
-            payout_list.append(player.mention)
-
-            log_data.append({
-                "user": player,
-                "status": "WIN",
-                "old": current_balance + self.stake,
-                "new": current_balance + total_payout
-            })
-
-        # Process losers
-        for player in losing_team:
-            current_balance = await get_user_balance(player.id)
-            await update_match_history(player.id, self.team_size, is_win=False)
         match_timestamp = int(time.time())
         saved_match_id = await save_match_record(
             timestamp=match_timestamp,
@@ -263,11 +241,8 @@ class ResultView(discord.ui.View):
 
             log_data.append({
                 "user": player,
-                "status": "LOSS",
-                "old": current_balance + self.stake,
-                "new": current_balance
                 "status": status_str,
-                "old": old_balance,
+                "old": old_balance + self.stake, # Stake was deducted at start
                 "new": new_balance
             })
 
