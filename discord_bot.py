@@ -30,7 +30,7 @@ async def on_ready():
 
     # Print Bonus Limit Status
     bonus_count = await get_bonus_count()
-    print(f"........ Lucky Bonus Limit: {bonus_count}/50")
+    print(f"Lucky Bonus Limit: {bonus_count}/50")
 
     await bot.change_presence(activity=discord.CustomActivity(name="Rakietowe 1v1, 2v2, 3v3"))
     print(f"Logged as {bot.user}")
