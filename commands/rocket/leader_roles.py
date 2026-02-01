@@ -40,7 +40,7 @@ async def update_leader_role(guild: discord.Guild, team_size: int):
 
     # Identify candidates: everyone with max_wins
     candidates = [row for row in all_winners if row[1] == max_wins]
-    candidate_ids = [c[0] for c in candidates]
+    candidate_ids = [int(c[0]) for c in candidates]
 
     # Identify incumbents (current role holders)
     # We only care about incumbents who are ALSO candidates (still have max wins)

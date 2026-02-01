@@ -139,7 +139,7 @@ class SlashCommands(commands.Cog):
             # Format Wins
             wins_str = ""
             for i, row in enumerate(wins_list, 1):
-                user_id = row[0]
+                user_id = int(row[0])
                 wins = row[1]
                 # Try to resolve user
                 user = interaction.guild.get_member(user_id)
@@ -152,7 +152,7 @@ class SlashCommands(commands.Cog):
             # Format Earnings
             earnings_str = ""
             for i, row in enumerate(earnings_list, 1):
-                user_id = row[0]
+                user_id = int(row[0])
                 earnings = row[1] # (user_id, earnings)
                 user = interaction.guild.get_member(user_id)
                 name = user.display_name if user else f"<@{user_id}>"

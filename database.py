@@ -13,6 +13,137 @@ def get_db_config():
         url = url.replace("libsql://", "https://")
     return url, token
 
+async def migrate_tables_to_text(client):
+    """
+    Migrates tables containing user_id from INTEGER to TEXT.
+    """
+    tables_to_check = ["Leaderboard", "MatchParticipants", "UserAchievements"]
+
+    for table in tables_to_check:
+        try:
+            # Check schema
+            res = await client.execute(f"PRAGMA table_info({table})")
+            columns = res.rows
+            if not columns:
+                continue
+
+            # Find user_id column type
+            # Row format: cid, name, type, notnull, dflt_value, pk
+            # Note: libsql might return objects or tuples. Assuming index access works (0-based)
+            # or try/except if needed. Based on tests, it returns tuple-like.
+
+            user_id_col = next((c for c in columns if c[1] == 'user_id'), None)
+            if not user_id_col:
+                continue
+
+            current_type = str(user_id_col[2]).upper()
+            if 'INT' not in current_type:
+                continue # Already TEXT
+
+            print(f"Migrating {table} user_id to TEXT...")
+
+            # Start transaction explicitly if possible, or relying on auto-commit logic of execute?
+            # libsql client python usually autocommits. We'll do steps carefully.
+
+            temp_table = f"{table}_new"
+            await client.execute(f"DROP TABLE IF EXISTS {temp_table}")
+
+            # 1. Create New Table
+            if table == "MatchParticipants":
+                create_sql = """
+                CREATE TABLE MatchParticipants_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    match_id INTEGER,
+                    user_id TEXT,
+                    team TEXT,
+                    result TEXT,
+                    FOREIGN KEY(match_id) REFERENCES Matches(match_id)
+                );
+                """
+                await client.execute(create_sql)
+
+                # Copy Data
+                await client.execute(f"""
+                    INSERT INTO {temp_table} (id, match_id, user_id, team, result)
+                    SELECT id, match_id, CAST(user_id AS TEXT), team, result FROM {table}
+                """)
+
+            elif table == "UserAchievements":
+                create_sql = """
+                CREATE TABLE UserAchievements_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    achievement_id TEXT,
+                    unlocked_at INTEGER,
+                    UNIQUE(user_id, achievement_id)
+                );
+                """
+                await client.execute(create_sql)
+
+                # Copy Data
+                await client.execute(f"""
+                    INSERT INTO {temp_table} (id, user_id, achievement_id, unlocked_at)
+                    SELECT id, CAST(user_id AS TEXT), achievement_id, unlocked_at FROM {table}
+                """)
+
+            elif table == "Leaderboard":
+                # Leaderboard has dynamic columns. Reconstruct schema.
+                # user_id is PK.
+                # All other columns should be INTEGER DEFAULT 0 based on add_column logic.
+
+                # Filter out user_id from columns to process others
+                other_cols = [c for c in columns if c[1] != 'user_id']
+
+                col_defs = ["user_id TEXT PRIMARY KEY"]
+                col_names = ["user_id"]
+
+                for col in other_cols:
+                    c_name = col[1]
+                    c_type = col[2]
+                    c_dflt = col[4]
+
+                    # Quote name
+                    c_name_q = f'"{c_name}"'
+                    col_names.append(c_name_q)
+
+                    # Def: "colname" TYPE DEFAULT value
+                    dflt_str = f"DEFAULT {c_dflt}" if c_dflt is not None else ""
+                    col_defs.append(f'{c_name_q} {c_type} {dflt_str}')
+
+                create_sql = f"CREATE TABLE {temp_table} ({', '.join(col_defs)})"
+                await client.execute(create_sql)
+
+                # Copy Data
+                # SELECT CAST(user_id AS TEXT), "1v1_W", ...
+                select_cols = [f'CAST(user_id AS TEXT)'] + [c for c in col_names if c != 'user_id']
+                # Make sure order matches insert
+                # Insert order: user_id, others...
+
+                # Actually, INSERT INTO table (cols) SELECT cols is safer
+                cols_str = ", ".join(col_names)
+                # Need to handle the select part carefully
+                select_parts = []
+                for c in col_names:
+                    if c == 'user_id':
+                        select_parts.append('CAST(user_id AS TEXT)')
+                    else:
+                        select_parts.append(c)
+                select_str = ", ".join(select_parts)
+
+                await client.execute(f"INSERT INTO {temp_table} ({cols_str}) SELECT {select_str} FROM {table}")
+
+            # 2. Drop Old
+            await client.execute(f"DROP TABLE {table}")
+
+            # 3. Rename New
+            await client.execute(f"ALTER TABLE {temp_table} RENAME TO {table}")
+
+            print(f"Migration for {table} complete.")
+
+        except Exception as e:
+            print(f"Error migrating table {table}: {e}")
+            # If something fails, we might be in inconsistent state, but usually old table is preserved until Drop.
+
 async def init_system_tables():
     """Initializes the SystemConfig and new tables (Matches, Achievements) if they don't exist."""
     url, token = get_db_config()
@@ -31,6 +162,11 @@ async def init_system_tables():
         ON CONFLICT(key) DO NOTHING;
         """,
         """
+        CREATE TABLE IF NOT EXISTS Leaderboard (
+            user_id TEXT PRIMARY KEY
+        );
+        """,
+        """
         CREATE TABLE IF NOT EXISTS Matches (
             match_id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp INTEGER,
@@ -46,7 +182,7 @@ async def init_system_tables():
         CREATE TABLE IF NOT EXISTS MatchParticipants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             match_id INTEGER,
-            user_id INTEGER,
+            user_id TEXT,
             team TEXT,
             result TEXT,
             FOREIGN KEY(match_id) REFERENCES Matches(match_id)
@@ -55,7 +191,7 @@ async def init_system_tables():
         """
         CREATE TABLE IF NOT EXISTS UserAchievements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            user_id TEXT,
             achievement_id TEXT,
             unlocked_at INTEGER,
             UNIQUE(user_id, achievement_id)
@@ -64,6 +200,9 @@ async def init_system_tables():
     ]
 
     async with libsql_client.create_client(url, auth_token=token) as client:
+        # Run migration first/early to ensure existing tables are updated
+        await migrate_tables_to_text(client)
+
         for q in queries:
             try:
                 await client.execute(q)
@@ -90,6 +229,9 @@ async def update_match_history(user_id: int, team_size: int, is_win: bool, goals
 
     url, token = get_db_config()
     if not url: return
+
+    # Cast user_id to str
+    user_id = str(user_id)
 
     # Determine columns
     result_type = "W" if is_win else "L"
@@ -149,16 +291,12 @@ async def save_match_record(
                 timestamp, game_mode, stake, winner_team, blue_score_sets, orange_score_sets, score_details
             ])
 
-            # Get match_id from RETURNING or last_insert_rowid if needed (libsql returns rows for RETURNING)
             match_id = match_res.rows[0][0] if match_res.rows else None
-
-            # If RETURNING didn't work (depending on driver/db version), fetch max id (less safe but fallback)
-            # But Turso/libsql usually supports RETURNING
 
             if match_id:
                 for p in participants:
                     await client.execute(insert_participant_sql, [
-                        match_id, p['user_id'], p['team'], p['result']
+                        match_id, str(p['user_id']), p['team'], p['result']
                     ])
                 return match_id
             return -1
@@ -170,6 +308,8 @@ async def get_user_matches_history(user_id: int, limit: int = 10):
     """Fetches recent matches for a user."""
     url, token = get_db_config()
     if not url: return []
+
+    user_id = str(user_id)
 
     query = """
         SELECT m.match_id, m.timestamp, m.game_mode, m.stake, m.winner_team,
@@ -209,6 +349,8 @@ async def get_user_leaderboard_stats(user_id: int):
     url, token = get_db_config()
     if not url: return None
 
+    user_id = str(user_id)
+
     # We need to select all relevant columns
     cols = [
         "1v1_W", "1v1_L", "1v1_GS", "1v1_GC",
@@ -239,6 +381,8 @@ async def add_user_achievement(user_id: int, achievement_id: str):
     url, token = get_db_config()
     if not url: return False
 
+    user_id = str(user_id)
+
     query = """
         INSERT INTO UserAchievements (user_id, achievement_id, unlocked_at)
         VALUES (?, ?, ?)
@@ -257,6 +401,8 @@ async def get_user_achievements(user_id: int):
     """Fetches all achievements for a user."""
     url, token = get_db_config()
     if not url: return []
+
+    user_id = str(user_id)
 
     query = "SELECT achievement_id, unlocked_at FROM UserAchievements WHERE user_id = ?"
 
