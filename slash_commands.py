@@ -208,12 +208,13 @@ class SlashCommands(commands.Cog):
         embed.set_thumbnail(url=user.display_avatar.url)
 
         # General Stats
+        goal_balance_str = f"+{goal_balance}" if goal_balance > 0 else str(goal_balance)
         general_desc = (
             f"**Mecze:** {total_games}\n"
             f"**Wygrane:** {total_wins}\n"
             f"**Przegrane:** {total_losses}\n"
             f"**Winrate:** {winrate}%\n"
-            f"**Bilans Bramek:** {goal_balance} ({total_gs} - {total_gc})"
+            f"**Bilans Bramek:** {goal_balance_str} ({total_gs} - {total_gc})"
         )
         embed.add_field(name="📊 Statystyki Ogólne", value=general_desc, inline=False)
 
@@ -229,9 +230,12 @@ class SlashCommands(commands.Cog):
             else:
                 mode_wr = 0
 
+            diff = gs - gc
+            diff_str = f"+{diff}" if diff > 0 else str(diff)
+
             embed.add_field(
                 name=f"{mode}v{mode}",
-                value=f"W/L: {w}/{l} ({mode_wr}%)\nGole: {gs}:{gc} ({gs-gc})",
+                value=f"W/L: {w}/{l} ({mode_wr}%)\nGole: {gs}:{gc} ({diff_str})",
                 inline=True
             )
 
