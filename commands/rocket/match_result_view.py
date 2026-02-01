@@ -189,8 +189,8 @@ class ResultView(discord.ui.View):
 
         # Only try if limit not reached
         if current_bonus_count + winners_count <= 50:
-            # 10% chance for bonus
-            if random.random() < 0.10:
+            # 15% chance for bonus
+            if random.random() < 0.15:
                 bonus_awarded = True
                 bonus_amount = int(self.stake * 0.5)
                 # Increment DB counter
