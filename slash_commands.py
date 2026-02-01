@@ -134,7 +134,7 @@ class SlashCommands(commands.Cog):
         for team_size in [1, 2, 3]:
             data = await get_leaderboard_data(team_size)
             wins_list = data['wins']
-            score_list = data['score']
+            earnings_list = data['earnings']
 
             # Format Wins
             wins_str = ""
@@ -149,17 +149,17 @@ class SlashCommands(commands.Cog):
             if not wins_str:
                 wins_str = "*Brak danych*"
 
-            # Format Score
-            score_str = ""
-            for i, row in enumerate(score_list, 1):
+            # Format Earnings
+            earnings_str = ""
+            for i, row in enumerate(earnings_list, 1):
                 user_id = row[0]
-                score = row[3] # (user_id, wins, losses, score)
+                earnings = row[1] # (user_id, earnings)
                 user = interaction.guild.get_member(user_id)
                 name = user.display_name if user else f"<@{user_id}>"
-                score_str += f"`{i}.` **{name}** • {score} pkt\n"
+                earnings_str += f"`{i}.` **{name}** • {earnings} 💰\n"
 
-            if not score_str:
-                score_str = "*Brak danych*"
+            if not earnings_str:
+                earnings_str = "*Brak danych*"
 
             embed.add_field(
                 name=f"🏆 {team_size}v{team_size} | Najwięcej Wygranych",
@@ -167,8 +167,8 @@ class SlashCommands(commands.Cog):
                 inline=True
             )
             embed.add_field(
-                name=f"🚀 {team_size}v{team_size} | Najwyższy Wynik",
-                value=score_str,
+                name=f"💰 {team_size}v{team_size} | Najwięcej Zarobionej Kasy",
+                value=earnings_str,
                 inline=True
             )
             # Add empty field for spacing/formatting if needed, but 2 cols per row is fine for 3 rows
