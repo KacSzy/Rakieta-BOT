@@ -15,7 +15,7 @@ from commands.rocket.achievements import check_achievements
 
 
 class MatchScoreModal(discord.ui.Modal):
-    def __init__(self, view: 'ResultView', team_name: str, label: str, is_bo3: bool):
+    def __init__(self, view: 'ResultView', team_name: str, is_bo3: bool):
         super().__init__(title=f"Zgłoś wynik dla {team_name}")
         self.view_ref = view
         self.team_name = team_name
