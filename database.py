@@ -302,6 +302,7 @@ async def get_leaderboard_data(team_size: int):
         JOIN Matches m ON mp.match_id = m.match_id
         WHERE m.game_mode = {team_size}
         GROUP BY mp.user_id
+        HAVING earnings > 0
         ORDER BY earnings DESC
         LIMIT 3
     """
