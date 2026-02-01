@@ -10,6 +10,7 @@ from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import EDEK_USER_ID
+from database import get_leaderboard_data
 
 GUILD_ID = os.getenv("GUILD")
 UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
@@ -113,6 +114,60 @@ class SlashCommands(commands.Cog):
         await interaction.response.defer()
         await handle_gemini_command(interaction, question)
 
+    @app_commands.command(name='leaderboard', description='Wyświetla ranking graczy Rocket League (1v1, 2v2, 3v3).')
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def leaderboard(self, interaction: Interaction):
+        await interaction.response.defer()
+
+        embed = discord.Embed(
+            title="🏆 Rocket League Leaderboard 🏆",
+            color=discord.Color.gold()
+        )
+
+        for team_size in [1, 2, 3]:
+            data = await get_leaderboard_data(team_size)
+            wins_list = data['wins']
+            score_list = data['score']
+
+            # Format Wins
+            wins_str = ""
+            for i, row in enumerate(wins_list, 1):
+                user_id = row[0]
+                wins = row[1]
+                # Try to resolve user
+                user = interaction.guild.get_member(user_id)
+                name = user.display_name if user else f"<@{user_id}>"
+                wins_str += f"{i}. **{name}** - {wins} W\n"
+
+            if not wins_str:
+                wins_str = "Brak danych"
+
+            # Format Score
+            score_str = ""
+            for i, row in enumerate(score_list, 1):
+                user_id = row[0]
+                score = row[3] # (user_id, wins, losses, score)
+                user = interaction.guild.get_member(user_id)
+                name = user.display_name if user else f"<@{user_id}>"
+                score_str += f"{i}. **{name}** - {score} pts\n"
+
+            if not score_str:
+                score_str = "Brak danych"
+
+            embed.add_field(
+                name=f"⚽ {team_size}v{team_size} - Most Wins",
+                value=wins_str,
+                inline=True
+            )
+            embed.add_field(
+                name=f"⭐ {team_size}v{team_size} - Highest Score",
+                value=score_str,
+                inline=True
+            )
+            # Add empty field for spacing/formatting if needed, but 2 cols per row is fine for 3 rows
+            embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        await interaction.followup.send(embed=embed)
 
     # -----------------------------------------------------------------------------------------------
 
