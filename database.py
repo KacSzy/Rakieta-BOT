@@ -126,3 +126,68 @@ async def get_all_winners(team_size: int):
     except Exception as e:
         print(f"Error fetching winners for {team_size}v{team_size}: {e}")
         return []
+
+
+async def init_system_tables():
+    """Initializes the SystemConfig table if it doesn't exist."""
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    create_table_query = """
+    CREATE TABLE IF NOT EXISTS SystemConfig (
+        key TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    );
+    """
+
+    # Initialize lucky_bonus_count if not present
+    init_value_query = """
+    INSERT INTO SystemConfig (key, value)
+    VALUES ('lucky_bonus_count', 0)
+    ON CONFLICT(key) DO NOTHING;
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute(create_table_query)
+            await client.execute(init_value_query)
+    except Exception as e:
+        print(f"Error initializing system tables: {e}")
+
+
+async def get_bonus_count() -> int:
+    """Fetches the number of lucky bonuses awarded so far."""
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return 50 # Fail safe to max to prevent overflow if DB down
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = "SELECT value FROM SystemConfig WHERE key = 'lucky_bonus_count'"
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query)
+            if res.rows:
+                return res.rows[0][0]
+            return 0
+    except Exception as e:
+        print(f"Error fetching bonus count: {e}")
+        return 50 # Fail safe
+
+
+async def increment_bonus_count(amount: int):
+    """Increments the lucky bonus counter."""
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = "UPDATE SystemConfig SET value = value + ? WHERE key = 'lucky_bonus_count'"
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute(query, [amount])
+    except Exception as e:
+        print(f"Error incrementing bonus count: {e}")

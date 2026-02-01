@@ -3,7 +3,7 @@ import random
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import ADMIN_USER_ID, MATCH_LOGS_CHANNEL_ID
-from database import update_match_history
+from database import update_match_history, get_bonus_count, increment_bonus_count
 from commands.rocket.leader_roles import update_leader_role
 
 
@@ -56,10 +56,18 @@ class ResultView(discord.ui.View):
         bonus_awarded = False
         bonus_amount = 0
 
-        # 10% chance for bonus
-        if random.random() < 0.10:
-            bonus_awarded = True
-            bonus_amount = int(self.stake * 0.5)
+        # Check global limit
+        current_bonus_count = await get_bonus_count()
+        winners_count = len(winning_team)
+
+        # Only try if limit not reached
+        if current_bonus_count + winners_count <= 50:
+            # 10% chance for bonus
+            if random.random() < 0.10:
+                bonus_awarded = True
+                bonus_amount = int(self.stake * 0.5)
+                # Increment DB counter
+                await increment_bonus_count(winners_count)
 
         total_payout = (self.stake * 2) + bonus_amount
 
