@@ -3,7 +3,8 @@ import random
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import ADMIN_USER_ID, MATCH_LOGS_CHANNEL_ID
-from database import update_match_history, get_bonus_count, increment_bonus_count
+from database import update_match_history, get_bonus_count, increment_bonus_count, log_match, get_user_matches, get_user_achievements, unlock_achievement
+from achievements import check_new_achievements
 from commands.rocket.leader_roles import update_leader_role
 
 
@@ -72,6 +73,7 @@ class ResultView(discord.ui.View):
         total_payout = (self.stake * 2) + bonus_amount
 
         payout_list = []
+        new_achievements_msg = []
 
         # Process winners
         for player in winning_team:
@@ -81,6 +83,9 @@ class ResultView(discord.ui.View):
             await add_money_unbelievable(player.id, 0, total_payout)
             await update_match_history(player.id, self.team_size, is_win=True)
             payout_list.append(player.mention)
+
+            # Log Match & Check Achievements
+            await self._process_match_end(interaction, player, True, winning_team, losing_team, new_achievements_msg)
 
             # Record for log (New balance = Old + Total Payout)
             log_data.append({
@@ -97,6 +102,9 @@ class ResultView(discord.ui.View):
 
             await update_match_history(player.id, self.team_size, is_win=False)
 
+            # Log Match & Check Achievements
+            await self._process_match_end(interaction, player, False, losing_team, winning_team, new_achievements_msg)
+
             # Record for log (New balance = Old, as stake was already lost)
             log_data.append({
                 "user": player,
@@ -111,6 +119,10 @@ class ResultView(discord.ui.View):
 
         if bonus_awarded:
             message += f"\n🍀 **LUCKY!** Wylosowano dodatkowy bonus {bonus_amount} 💰 (50% stawki)! Łącznie otrzymują po {total_payout} 💰."
+
+        # Announce Achievements
+        if new_achievements_msg:
+            message += "\n\n" + "\n".join(new_achievements_msg)
 
         await interaction.channel.send(message)
 
@@ -129,6 +141,44 @@ class ResultView(discord.ui.View):
         await asyncio.sleep(5)
         await interaction.channel.edit(archived=True, locked=True)
         self.stop()
+
+    async def _process_match_end(self, interaction, player, is_win, teammates, opponents, msg_list):
+        """Logs match and checks for achievements."""
+        try:
+            # Prepare data
+            t_names = [p.display_name for p in teammates if p.id != player.id] # Exclude self? Usually teammates includes everyone in team.
+            # Let's keep self in teammates or not?
+            # Logic "teammates" usually implies "other people". But for "3v3", team size is 3.
+            # I'll store all names.
+            t_names = [p.display_name for p in teammates]
+            o_names = [p.display_name for p in opponents]
+
+            match_data = {
+                'match_type': self.team_size,
+                'result': 'WIN' if is_win else 'LOSS',
+                'stake': self.stake,
+                'teammates': t_names,
+                'opponents': o_names
+            }
+
+            # Log to DB
+            await log_match(player.id, match_data)
+
+            # Check Achievements
+            # Fetch enough history for "500 games" achievement
+            history = await get_user_matches(player.id, limit=1000)
+            unlocked = await get_user_achievements(player.id)
+            unlocked_ids = {u['id'] for u in unlocked}
+
+            new_unlocked = check_new_achievements(history, unlocked_ids)
+
+            for ach in new_unlocked:
+                await unlock_achievement(player.id, ach.id)
+                msg_list.append(f"🏆 **{player.display_name}** zdobył osiągnięcie: **{ach.name}** - *{ach.description}*")
+
+        except Exception as e:
+            print(f"Error processing match end for {player.id}: {e}")
+
 
     @discord.ui.button(label="✅ Wygrana", style=discord.ButtonStyle.green)
     async def win_button(self, interaction: discord.Interaction, button: discord.ui.Button):

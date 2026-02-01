@@ -1,8 +1,8 @@
 import os
-
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
+from datetime import datetime
 
 from commands.gemini.ask_gemini import handle_gemini_command
 from commands.mod.change_presence import PresenceType, change_presence
@@ -10,7 +10,8 @@ from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import EDEK_USER_ID
-from database import get_leaderboard_data
+from database import get_leaderboard_data, get_user_matches, get_user_stats, get_user_achievements
+from achievements import ACHIEVEMENTS
 
 GUILD_ID = os.getenv("GUILD")
 UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
@@ -167,6 +168,108 @@ class SlashCommands(commands.Cog):
             )
             # Add empty field for spacing/formatting if needed, but 2 cols per row is fine for 3 rows
             embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name='history', description='Wyświetla historię meczy gracza.')
+    @app_commands.describe(user="Użytkownik (opcjonalnie)")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def history(self, interaction: Interaction, user: discord.Member = None):
+        target = user or interaction.user
+        await interaction.response.defer()
+
+        matches = await get_user_matches(target.id, limit=10)
+
+        if not matches:
+            await interaction.followup.send(f"{target.display_name} nie rozegrał jeszcze żadnych meczy.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title=f"📜 Historia meczy: {target.display_name}",
+            color=discord.Color.blue()
+        )
+
+        for match in matches:
+            # Parse timestamp if needed, but usually it's ISO string
+            try:
+                ts = datetime.fromisoformat(str(match['timestamp']))
+                date_str = ts.strftime("%d/%m %H:%M")
+            except:
+                date_str = str(match['timestamp'])
+
+            result_icon = "✅" if match['result'] == 'WIN' else "❌"
+            mode = f"{match['match_type']}v{match['match_type']}"
+
+            # Format opponents/teammates
+            # Teammates and Opponents are comma separated strings
+            # If user won, teammates are the winning team.
+
+            # Note: We saved names in DB.
+            teammates = match['teammates']
+            opponents = match['opponents']
+
+            embed.add_field(
+                name=f"{result_icon} {mode} | {match['stake']} 💰 | {date_str}",
+                value=f"**Sojusznicy:** {teammates}\n**Przeciwnicy:** {opponents}",
+                inline=False
+            )
+
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name='profile', description='Wyświetla profil gracza, statystyki i osiągnięcia.')
+    @app_commands.describe(user="Użytkownik (opcjonalnie)")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def profile(self, interaction: Interaction, user: discord.Member = None):
+        target = user or interaction.user
+        await interaction.response.defer()
+
+        stats = await get_user_stats(target.id)
+        achievements_data = await get_user_achievements(target.id)
+
+        embed = discord.Embed(
+            title=f"👤 Profil: {target.display_name}",
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+
+        # Stats
+        if stats:
+            wins = stats['wins']
+            losses = stats['losses']
+            total = wins + losses
+            winrate = round((wins / total * 100), 1) if total > 0 else 0
+
+            stats_str = f"**Wygrane:** {wins}\n**Przegrane:** {losses}\n**Winrate:** {winrate}%"
+
+            # Details
+            details_str = ""
+            for mode, s in stats['details'].items():
+                details_str += f"**{mode}:** {s['W']}W - {s['L']}L\n"
+
+            embed.add_field(name="📊 Statystyki Ogólne", value=stats_str, inline=True)
+            embed.add_field(name="⚔️ Tryby", value=details_str, inline=True)
+        else:
+            embed.add_field(name="📊 Statystyki", value="Brak danych.", inline=False)
+
+        # Achievements
+        if achievements_data:
+            ach_list = []
+            for ach_record in achievements_data:
+                ach_def = ACHIEVEMENTS.get(ach_record['id'])
+                if ach_def:
+                    ach_list.append(f"🏆 **{ach_def.name}**")
+                else:
+                    ach_list.append(f"🏆 *{ach_record['id']}*")
+
+            # Join with newlines or commas
+            # If too many, maybe count?
+            ach_str = "\n".join(ach_list)
+            if len(ach_str) > 1000:
+                ach_str = ach_str[:1000] + "..."
+
+            embed.add_field(name=f"🎖 Osiągnięcia ({len(achievements_data)})", value=ach_str, inline=False)
+        else:
+            embed.add_field(name="🎖 Osiągnięcia", value="Brak zdobytych osiągnięć.", inline=False)
 
         await interaction.followup.send(embed=embed)
 

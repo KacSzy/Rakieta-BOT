@@ -1,5 +1,7 @@
 import os
 import libsql_client
+import json
+from datetime import datetime
 
 async def update_match_history(user_id: int, team_size: int, is_win: bool):
     """
@@ -135,24 +137,44 @@ async def init_system_tables():
     if not url: return
     if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
 
-    create_table_query = """
-    CREATE TABLE IF NOT EXISTS SystemConfig (
-        key TEXT PRIMARY KEY,
-        value INTEGER DEFAULT 0
-    );
-    """
-
-    # Initialize lucky_bonus_count if not present
-    init_value_query = """
-    INSERT INTO SystemConfig (key, value)
-    VALUES ('lucky_bonus_count', 0)
-    ON CONFLICT(key) DO NOTHING;
-    """
+    queries = [
+        """
+        CREATE TABLE IF NOT EXISTS SystemConfig (
+            key TEXT PRIMARY KEY,
+            value INTEGER DEFAULT 0
+        );
+        """,
+        """
+        INSERT INTO SystemConfig (key, value)
+        VALUES ('lucky_bonus_count', 0)
+        ON CONFLICT(key) DO NOTHING;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS Matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            match_type INTEGER,
+            result TEXT,
+            stake INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            teammates TEXT,
+            opponents TEXT
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS UserAchievements (
+            user_id INTEGER,
+            achievement_id TEXT,
+            unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, achievement_id)
+        );
+        """
+    ]
 
     try:
         async with libsql_client.create_client(url, auth_token=token) as client:
-            await client.execute(create_table_query)
-            await client.execute(init_value_query)
+            for q in queries:
+                await client.execute(q)
     except Exception as e:
         print(f"Error initializing system tables: {e}")
 
@@ -191,3 +213,184 @@ async def increment_bonus_count(amount: int):
             await client.execute(query, [amount])
     except Exception as e:
         print(f"Error incrementing bonus count: {e}")
+
+# ---------------- Match History & Achievements ----------------
+
+async def log_match(user_id: int, match_data: dict):
+    """
+    Logs a match to the Matches table.
+    match_data expects: match_type (int), result (str), stake (int), teammates (list/str), opponents (list/str)
+    """
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = """
+    INSERT INTO Matches (user_id, match_type, result, stake, teammates, opponents, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """
+
+    # Format teammates/opponents as string if list
+    teammates = match_data.get('teammates', "")
+    if isinstance(teammates, list):
+        teammates = ", ".join(teammates)
+
+    opponents = match_data.get('opponents', "")
+    if isinstance(opponents, list):
+        opponents = ", ".join(opponents)
+
+    params = [
+        user_id,
+        match_data.get('match_type'),
+        match_data.get('result'),
+        match_data.get('stake'),
+        teammates,
+        opponents,
+        datetime.now().isoformat()
+    ]
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute(query, params)
+    except Exception as e:
+        print(f"Error logging match for {user_id}: {e}")
+
+
+async def get_user_matches(user_id: int, limit: int = 20):
+    """
+    Fetches the last N matches for a user.
+    Returns a list of dictionaries.
+    """
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return []
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = """
+    SELECT match_type, result, stake, teammates, opponents, timestamp
+    FROM Matches
+    WHERE user_id = ?
+    ORDER BY timestamp DESC
+    LIMIT ?
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query, [user_id, limit])
+            matches = []
+            for row in res.rows:
+                matches.append({
+                    'match_type': row[0],
+                    'result': row[1],
+                    'stake': row[2],
+                    'teammates': row[3],
+                    'opponents': row[4],
+                    'timestamp': row[5] # String ISO format
+                })
+            return matches
+    except Exception as e:
+        print(f"Error fetching matches for {user_id}: {e}")
+        return []
+
+
+async def unlock_achievement(user_id: int, achievement_id: str):
+    """
+    Unlocks an achievement for a user.
+    """
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = """
+    INSERT INTO UserAchievements (user_id, achievement_id, unlocked_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id, achievement_id) DO NOTHING
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute(query, [user_id, achievement_id, datetime.now().isoformat()])
+    except Exception as e:
+        print(f"Error unlocking achievement {achievement_id} for {user_id}: {e}")
+
+
+async def get_user_achievements(user_id: int):
+    """
+    Fetches all unlocked achievements for a user.
+    Returns a list of dicts: {'id': ..., 'unlocked_at': ...}
+    """
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return []
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    query = """
+    SELECT achievement_id, unlocked_at
+    FROM UserAchievements
+    WHERE user_id = ?
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query, [user_id])
+            achievements = []
+            for row in res.rows:
+                achievements.append({
+                    'id': row[0],
+                    'unlocked_at': row[1]
+                })
+            return achievements
+    except Exception as e:
+        print(f"Error fetching achievements for {user_id}: {e}")
+        return []
+
+async def get_user_stats(user_id: int):
+    """
+    Calculates aggregated stats for a user across all matches.
+    """
+    # We can calculate this from Matches table or Leaderboard table.
+    # Leaderboard table has summary. Matches table allows recalculation.
+    # For simplicity, let's use Leaderboard table data if available, or just aggregate Matches?
+    # Leaderboard table is split by team size.
+    # Let's fetch from Leaderboard for now as it persists total wins/losses.
+
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return None
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    # We want total wins and losses across all modes.
+    # Schema: user_id, "1v1_W", "1v1_L", "2v2_W", ...
+
+    query = """
+    SELECT "1v1_W", "1v1_L", "2v2_W", "2v2_L", "3v3_W", "3v3_L"
+    FROM Leaderboard
+    WHERE user_id = ?
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query, [user_id])
+            if res.rows:
+                row = res.rows[0]
+                # row is tuple
+                stats = {
+                    '1v1': {'W': row[0] or 0, 'L': row[1] or 0},
+                    '2v2': {'W': row[2] or 0, 'L': row[3] or 0},
+                    '3v3': {'W': row[4] or 0, 'L': row[5] or 0}
+                }
+
+                total_w = stats['1v1']['W'] + stats['2v2']['W'] + stats['3v3']['W']
+                total_l = stats['1v1']['L'] + stats['2v2']['L'] + stats['3v3']['L']
+
+                return {
+                    'wins': total_w,
+                    'losses': total_l,
+                    'details': stats
+                }
+            return None
+    except Exception as e:
+        print(f"Error fetching stats for {user_id}: {e}")
+        return None
