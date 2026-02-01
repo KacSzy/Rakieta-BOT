@@ -95,6 +95,13 @@ async def update_leader_role(guild: discord.Guild, team_size: int):
     # 2. Add role to final_leader_ids who don't have it
     for uid in final_leader_ids:
         member = guild.get_member(uid)
+        if not member:
+            try:
+                member = await guild.fetch_member(uid)
+            except Exception as e:
+                print(f"Failed to fetch member {uid}: {e}")
+                continue
+
         if member and role not in member.roles:
             try:
                 await member.add_roles(role)

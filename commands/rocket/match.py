@@ -47,8 +47,8 @@ async def get_user_balance(user_id: int) -> int:
     return 0
 
 
-async def take_bet(player: discord.Member, stake: int) -> None:
-    """Deduct stake from each player's balance."""
+async def take_bet(player: discord.Member, stake: int) -> bool:
+    """Deduct stake from each player's balance. Returns True if successful."""
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -60,8 +60,8 @@ async def take_bet(player: discord.Member, stake: int) -> None:
 
     async with aiohttp.ClientSession() as session:
         async with session.patch(url, json=payload, headers=headers) as response:
-             # Consume the response
             await response.text()
+            return response.status == 200
 
 
 class MatchView(discord.ui.View):
@@ -75,10 +75,14 @@ class MatchView(discord.ui.View):
         self.orange_team: List[discord.Member] = []
         self.message = None
         self.required_role = get_rank(creator)
+        self.match_started = False
         # Note: take_bet is called in send_initial_message for the creator
 
     async def on_timeout(self):
         """Handle view timeout by refunding everyone and removing components."""
+        if self.match_started:
+            return
+
         # Refund everyone currently in the teams
         all_players = self.blue_team + self.orange_team
         for player in all_players:
@@ -91,7 +95,10 @@ class MatchView(discord.ui.View):
     async def send_initial_message(self, interaction: discord.Interaction):
         """Send the initial match invitation message."""
         # Take the bet from the creator here
-        await take_bet(self.creator, self.stake)
+        if not await take_bet(self.creator, self.stake):
+            await interaction.followup.send("Błąd pobierania stawki. Sprawdź swoje konto!", ephemeral=True)
+            self.stop()
+            return
 
         embed = self._create_match_embed()
         channel = interaction.guild.get_channel(MATCH_CHANNEL_ID)
@@ -149,7 +156,9 @@ class MatchView(discord.ui.View):
             return
 
         # Deduct stake
-        await take_bet(user, self.stake)
+        if not await take_bet(user, self.stake):
+            await interaction.response.send_message("Błąd pobierania stawki. Sprawdź swoje konto!", ephemeral=True)
+            return
 
         # Add to team
         target_team.append(user)
@@ -211,6 +220,9 @@ class MatchView(discord.ui.View):
 
     async def start_match(self):
         """Start the match after enough players have joined."""
+        self.match_started = True
+        self.stop() # Stop the view from listening to interactions and timeouts
+
         # Create discussion thread
         thread = await self._create_match_thread()
 
@@ -220,7 +232,7 @@ class MatchView(discord.ui.View):
 
         # Add result submission view
         # Passing teams to ResultView
-        view = ResultView(self.blue_team, self.orange_team, self.stake, self.team_size)
+        view = ResultView(self.blue_team, self.orange_team, self.stake, self.team_size, self.match_type)
         await thread.send("🔹 Potwierdź wynik meczu:", view=view)
 
     async def _create_match_thread(self):
