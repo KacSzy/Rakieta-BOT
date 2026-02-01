@@ -246,8 +246,22 @@ class MatchView(discord.ui.View):
 
         # Add result submission view
         # Passing teams to ResultView
-        view = ResultView(self.blue_team, self.orange_team, self.stake, self.team_size, self.match_type)
-        await thread.send("🔹 Potwierdź wynik meczu:", view=view)
+
+        # Create a nice Embed for the match result confirmation
+        embed = discord.Embed(
+            title="🏁 Wynik Meczu",
+            description=(
+                f"**Mecz {self.team_size}v{self.team_size}**\n"
+                f"Tryb: **{self.match_type.value}**\n\n"
+                "Kapitanowie drużyn proszeni są o kliknięcie poniższego przycisku, "
+                "aby zgłosić dokładny wynik spotkania."
+            ),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Upewnijcie się, że wpisujecie ten sam wynik!")
+
+        view = ResultView(self.blue_team, self.orange_team, self.stake, self.team_size, self.match_type.value)
+        await thread.send(embed=embed, view=view)
 
     async def _create_match_thread(self):
         """Create a thread for match discussion."""

@@ -187,26 +187,28 @@ class ResultView(discord.ui.View):
         await interaction.channel.edit(archived=True, locked=True)
         self.stop()
 
-    @discord.ui.button(label="📝 Zgłoś Wynik", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="📝 Zgłoś Wynik", style=discord.ButtonStyle.success)
     async def report_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        captain_blue = self._get_captain(self.blue_team)
-        captain_orange = self._get_captain(self.orange_team)
+        try:
+            user = interaction.user
+            captain_blue = self._get_captain(self.blue_team)
+            captain_orange = self._get_captain(self.orange_team)
 
-        if user != captain_blue and user != captain_orange:
-            await interaction.response.send_message("Tylko kapitanowie drużyn mogą zgłaszać wynik!", ephemeral=True)
-            return
+            if user != captain_blue and user != captain_orange:
+                await interaction.response.send_message("Tylko kapitanowie drużyn mogą zgłaszać wynik!", ephemeral=True)
+                return
 
-        is_blue = (user == captain_blue)
-        team_name = "Blue" if is_blue else "Orange"
+            is_blue = (user == captain_blue)
+            team_name = "Blue" if is_blue else "Orange"
 
-        # Determine label based on match type
-        # MatchType is Enum, need to import or handle value
-        # In match.py: BO3 = "Best of 3", ONE_GAME = "One game"
-        label = "Mapy" if "Best of 3" in str(self.match_type.value) else "Gole"
+            # self.match_type is now a string value, so we can check it directly
+            label = "Mapy (np. 2)" if "Best of 3" in str(self.match_type) else "Gole (np. 5)"
 
-        modal = MatchScoreModal(self, team_name, label)
-        await interaction.response.send_modal(modal)
+            modal = MatchScoreModal(self, team_name, label)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            print(f"Error in report_button: {e}")
+            await interaction.response.send_message("Wystąpił błąd przy otwieraniu formularza. Spróbuj ponownie.", ephemeral=True)
 
     @discord.ui.button(label="x", style=discord.ButtonStyle.grey)
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
