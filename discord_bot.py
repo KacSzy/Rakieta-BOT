@@ -25,7 +25,7 @@ bot = commands.Bot(command_prefix="_", intents=intents)
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.CustomActivity(name="/ask Zadaj mi pytanie!"))
+    await bot.change_presence(activity=discord.CustomActivity(name="Rakietowe 1v1, 2v2, 3v3"))
     print(f"Logged as {bot.user}")
     await bot.tree.sync(guild=GUILD)
     # await bot.tree.sync(guild=UNBAN_GUILD)
