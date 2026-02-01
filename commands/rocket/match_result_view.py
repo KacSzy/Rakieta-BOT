@@ -138,7 +138,7 @@ class ResultView(discord.ui.View):
 
         # Process winners
         for player in winning_team:
-            old_balance = await get_user_balance(player.id)
+            current_balance = await get_user_balance(player.id)
             await add_money_unbelievable(player.id, 0, total_payout)
             await update_match_history(player.id, self.team_size, is_win=True)
             payout_list.append(player.mention)
@@ -146,20 +146,20 @@ class ResultView(discord.ui.View):
             log_data.append({
                 "user": player,
                 "status": "WIN",
-                "old": old_balance,
-                "new": old_balance + total_payout
+                "old": current_balance + self.stake,
+                "new": current_balance + total_payout
             })
 
         # Process losers
         for player in losing_team:
-            old_balance = await get_user_balance(player.id)
+            current_balance = await get_user_balance(player.id)
             await update_match_history(player.id, self.team_size, is_win=False)
 
             log_data.append({
                 "user": player,
                 "status": "LOSS",
-                "old": old_balance,
-                "new": old_balance
+                "old": current_balance + self.stake,
+                "new": current_balance
             })
 
         winners_str = ", ".join(payout_list)
