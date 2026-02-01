@@ -1,4 +1,5 @@
 import asyncio
+import random
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import ADMIN_USER_ID
@@ -49,9 +50,20 @@ class ResultView(discord.ui.View):
 
         payout_list = []
 
+        # Calculate Payout & Bonus
+        bonus_awarded = False
+        bonus_amount = 0
+
+        # 10% chance for bonus
+        if random.random() < 0.10:
+            bonus_awarded = True
+            bonus_amount = int(self.stake * 0.5)
+
+        total_payout = (self.stake * 2) + bonus_amount
+
         # Process winners
         for player in winning_team:
-            await add_money_unbelievable(player.id, 0, (self.stake * 2))
+            await add_money_unbelievable(player.id, 0, total_payout)
             await update_match_history(player.id, self.team_size, is_win=True)
             payout_list.append(player.mention)
 
@@ -60,7 +72,13 @@ class ResultView(discord.ui.View):
             await update_match_history(player.id, self.team_size, is_win=False)
 
         winners_str = ", ".join(payout_list)
-        await interaction.channel.send(f"🎉 Zwycięzcy: {winners_str} zgarniają po {self.stake * 2} 💰!")
+
+        message = f"🎉 Zwycięzcy: {winners_str} zgarniają po {self.stake * 2} 💰!"
+
+        if bonus_awarded:
+            message += f"\n🍀 **LUCKY!** Wylosowano dodatkowy bonus {bonus_amount} 💰 (50% stawki)! Łącznie otrzymują po {total_payout} 💰."
+
+        await interaction.channel.send(message)
 
         # Update Leader Roles
         try:
