@@ -120,7 +120,7 @@ class SlashCommands(commands.Cog):
         await interaction.response.defer()
 
         embed = discord.Embed(
-            title="🏆 Rocket League Leaderboard 🏆",
+            title="🏆 Ranking Rocket League 🏆",
             color=discord.Color.gold()
         )
 
@@ -149,18 +149,18 @@ class SlashCommands(commands.Cog):
                 score = row[3] # (user_id, wins, losses, score)
                 user = interaction.guild.get_member(user_id)
                 name = user.display_name if user else f"<@{user_id}>"
-                score_str += f"{i}. **{name}** - {score} pts\n"
+                score_str += f"{i}. **{name}** - {score} pkt\n"
 
             if not score_str:
                 score_str = "Brak danych"
 
             embed.add_field(
-                name=f"⚽ {team_size}v{team_size} - Most Wins",
+                name=f"⚽ {team_size}v{team_size} - Najwięcej Wygranych",
                 value=wins_str,
                 inline=True
             )
             embed.add_field(
-                name=f"⭐ {team_size}v{team_size} - Highest Score",
+                name=f"⭐ {team_size}v{team_size} - Najwyższy Wynik",
                 value=score_str,
                 inline=True
             )

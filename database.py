@@ -18,6 +18,9 @@ async def update_match_history(user_id: int, team_size: int, is_win: bool):
         print("Database CONNECTION_URL not set.")
         return
 
+    if url.startswith("libsql://"):
+        url = url.replace("libsql://", "https://")
+
     # Determine column to update
     result_type = "W" if is_win else "L"
     column_name = f"{team_size}v{team_size}_{result_type}"
@@ -53,6 +56,9 @@ async def get_leaderboard_data(team_size: int):
     if not url:
         print("Database CONNECTION_URL not set.")
         return {'wins': [], 'score': []}
+
+    if url.startswith("libsql://"):
+        url = url.replace("libsql://", "https://")
 
     wins_col = f"{team_size}v{team_size}_W"
     losses_col = f"{team_size}v{team_size}_L"
