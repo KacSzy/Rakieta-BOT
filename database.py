@@ -63,13 +63,6 @@ async def get_leaderboard_data(team_size: int):
     wins_col = f"{team_size}v{team_size}_W"
     losses_col = f"{team_size}v{team_size}_L"
 
-    # Query to get data, calculating score on the fly
-    # We select all users with at least 1 win or loss in this category to avoid clutter
-    # Actually, let's just fetch top N.
-    # We need two queries or one big query sorted in python.
-    # Since we need top 3 for TWO metrics, it might be cleaner to run two queries or fetch top X and sort in python.
-    # Given potential small userbase, fetching top 50 and sorting in Python is fine, but SQL is better.
-
     # 1. Top Wins
     query_wins = f"""
         SELECT user_id, "{wins_col}", "{losses_col}", ("{wins_col}" * 3 - "{losses_col}") as score
@@ -79,11 +72,12 @@ async def get_leaderboard_data(team_size: int):
         LIMIT 3
     """
 
-    # 2. Top Score
+    # 2. Top Score (filtered >= 0)
     query_score = f"""
         SELECT user_id, "{wins_col}", "{losses_col}", ("{wins_col}" * 3 - "{losses_col}") as score
         FROM Leaderboard
         WHERE ("{wins_col}" > 0 OR "{losses_col}" > 0)
+          AND ("{wins_col}" * 3 - "{losses_col}") >= 0
         ORDER BY score DESC, "{wins_col}" DESC
         LIMIT 3
     """
@@ -100,3 +94,35 @@ async def get_leaderboard_data(team_size: int):
     except Exception as e:
         print(f"Error fetching leaderboard for {team_size}v{team_size}: {e}")
         return {'wins': [], 'score': []}
+
+async def get_all_winners(team_size: int):
+    """
+    Retrieves ALL players sorted by wins (desc) and then score (desc).
+    Used for role assignment logic to find ties.
+    """
+    if team_size not in [1, 2, 3]:
+        return []
+
+    url = os.getenv("CONNECTION_URL")
+    token = os.getenv("CONNECTION_TOKEN")
+    if not url: return []
+    if url.startswith("libsql://"): url = url.replace("libsql://", "https://")
+
+    wins_col = f"{team_size}v{team_size}_W"
+    losses_col = f"{team_size}v{team_size}_L"
+
+    # Fetch users with at least 1 win
+    query = f"""
+        SELECT user_id, "{wins_col}", "{losses_col}", ("{wins_col}" * 3 - "{losses_col}") as score
+        FROM Leaderboard
+        WHERE "{wins_col}" > 0
+        ORDER BY "{wins_col}" DESC, score DESC
+    """
+
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            res = await client.execute(query)
+            return res.rows
+    except Exception as e:
+        print(f"Error fetching winners for {team_size}v{team_size}: {e}")
+        return []

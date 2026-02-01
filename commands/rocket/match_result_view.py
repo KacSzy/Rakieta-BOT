@@ -3,6 +3,7 @@ import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import ADMIN_USER_ID
 from database import update_match_history
+from commands.rocket.leader_roles import update_leader_role
 
 
 class ResultView(discord.ui.View):
@@ -60,6 +61,12 @@ class ResultView(discord.ui.View):
 
         winners_str = ", ".join(payout_list)
         await interaction.channel.send(f"🎉 Zwycięzcy: {winners_str} zgarniają po {self.stake * 2} 💰!")
+
+        # Update Leader Roles
+        try:
+            await update_leader_role(interaction.guild, self.team_size)
+        except Exception as e:
+            print(f"Failed to update leader roles: {e}")
 
         await asyncio.sleep(5)
         await interaction.channel.edit(archived=True, locked=True)

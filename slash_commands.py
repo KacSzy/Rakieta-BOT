@@ -120,9 +120,10 @@ class SlashCommands(commands.Cog):
         await interaction.response.defer()
 
         embed = discord.Embed(
-            title="🏆 Ranking Rocket League 🏆",
-            color=discord.Color.gold()
+            title="✨ Leaderzy Rankingów ✨",
+            color=discord.Color.teal()
         )
+        embed.set_footer(text="Statystyki odświeżane po każdym meczu.")
 
         for team_size in [1, 2, 3]:
             data = await get_leaderboard_data(team_size)
@@ -137,10 +138,10 @@ class SlashCommands(commands.Cog):
                 # Try to resolve user
                 user = interaction.guild.get_member(user_id)
                 name = user.display_name if user else f"<@{user_id}>"
-                wins_str += f"{i}. **{name}** - {wins} W\n"
+                wins_str += f"`{i}.` **{name}** • {wins} W\n"
 
             if not wins_str:
-                wins_str = "Brak danych"
+                wins_str = "*Brak danych*"
 
             # Format Score
             score_str = ""
@@ -149,18 +150,18 @@ class SlashCommands(commands.Cog):
                 score = row[3] # (user_id, wins, losses, score)
                 user = interaction.guild.get_member(user_id)
                 name = user.display_name if user else f"<@{user_id}>"
-                score_str += f"{i}. **{name}** - {score} pkt\n"
+                score_str += f"`{i}.` **{name}** • {score} pkt\n"
 
             if not score_str:
-                score_str = "Brak danych"
+                score_str = "*Brak danych*"
 
             embed.add_field(
-                name=f"⚽ {team_size}v{team_size} - Najwięcej Wygranych",
+                name=f"🏆 {team_size}v{team_size} | Najwięcej Wygranych",
                 value=wins_str,
                 inline=True
             )
             embed.add_field(
-                name=f"⭐ {team_size}v{team_size} - Najwyższy Wynik",
+                name=f"🚀 {team_size}v{team_size} | Najwyższy Wynik",
                 value=score_str,
                 inline=True
             )
