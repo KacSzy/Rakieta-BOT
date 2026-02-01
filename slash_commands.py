@@ -10,7 +10,13 @@ from commands.rocket.match import MatchView, get_user_balance, MatchType
 from commands.shop.remove_rank import check_and_remove_role
 from commands.unbelievable_API.add_money import add_money_unbelievable
 from const import EDEK_USER_ID
-from database import get_leaderboard_data
+from database import (
+    get_leaderboard_data,
+    get_user_leaderboard_stats,
+    get_user_matches_history,
+    get_user_achievements
+)
+from commands.rocket.achievements_config import ACHIEVEMENTS
 
 GUILD_ID = os.getenv("GUILD")
 UNBAN_GUILD_ID = os.getenv("UNBAN_GUILD")
@@ -167,6 +173,125 @@ class SlashCommands(commands.Cog):
             )
             # Add empty field for spacing/formatting if needed, but 2 cols per row is fine for 3 rows
             embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name='profile', description='Wyświetla profil gracza (statystyki i osiągnięcia).')
+    @app_commands.describe(user="Gracz, którego profil chcesz zobaczyć (opcjonalnie).")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def profile(self, interaction: Interaction, user: discord.Member = None):
+        if not user:
+            user = interaction.user
+
+        await interaction.response.defer()
+
+        # Fetch Stats
+        stats = await get_user_leaderboard_stats(user.id)
+        if not stats:
+            await interaction.followup.send(f"Brak danych dla użytkownika {user.mention}.", ephemeral=True)
+            return
+
+        # Fetch Achievements
+        achievements_data = await get_user_achievements(user.id)
+
+        # Calculate Aggregates
+        total_wins = sum(stats[k] for k in stats if k.endswith('_W'))
+        total_losses = sum(stats[k] for k in stats if k.endswith('_L'))
+        total_games = total_wins + total_losses
+        winrate = round((total_wins / total_games * 100), 1) if total_games > 0 else 0
+
+        total_gs = sum(stats[k] for k in stats if k.endswith('_GS'))
+        total_gc = sum(stats[k] for k in stats if k.endswith('_GC'))
+        goal_balance = total_gs - total_gc
+
+        embed = discord.Embed(title=f"👤 Profil Gracza: {user.display_name}", color=discord.Color.blue())
+        embed.set_thumbnail(url=user.display_avatar.url)
+
+        # General Stats
+        general_desc = (
+            f"**Mecze:** {total_games}\n"
+            f"**Wygrane:** {total_wins}\n"
+            f"**Przegrane:** {total_losses}\n"
+            f"**Winrate:** {winrate}%\n"
+            f"**Bilans Bramek:** {goal_balance} ({total_gs} - {total_gc})"
+        )
+        embed.add_field(name="📊 Statystyki Ogólne", value=general_desc, inline=False)
+
+        # Mode Details
+        for mode in [1, 2, 3]:
+            w = stats.get(f"{mode}v{mode}_W", 0)
+            l = stats.get(f"{mode}v{mode}_L", 0)
+            gs = stats.get(f"{mode}v{mode}_GS", 0)
+            gc = stats.get(f"{mode}v{mode}_GC", 0)
+
+            if w + l > 0:
+                mode_wr = round((w / (w+l) * 100), 1)
+            else:
+                mode_wr = 0
+
+            embed.add_field(
+                name=f"{mode}v{mode}",
+                value=f"W/L: {w}/{l} ({mode_wr}%)\nGole: {gs}:{gc} ({gs-gc})",
+                inline=True
+            )
+
+        # Achievements
+        if achievements_data:
+            ach_list = []
+            for ach_id, unlocked_at in achievements_data:
+                config = ACHIEVEMENTS.get(ach_id)
+                if config:
+                    ach_list.append(f"{config['name']}")
+
+            ach_str = ", ".join(ach_list)
+        else:
+            ach_str = "*Brak osiągnięć*"
+
+        embed.add_field(name="🏆 Osiągnięcia", value=ach_str, inline=False)
+
+        await interaction.followup.send(embed=embed)
+
+
+    @app_commands.command(name='history', description='Wyświetla historię ostatnich meczy gracza.')
+    @app_commands.describe(user="Gracz, którego historię chcesz zobaczyć (opcjonalnie).")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def history(self, interaction: Interaction, user: discord.Member = None):
+        if not user:
+            user = interaction.user
+
+        await interaction.response.defer()
+
+        # Fetch History
+        history = await get_user_matches_history(user.id, limit=10)
+
+        if not history:
+            await interaction.followup.send(f"Brak historii meczy dla użytkownika {user.mention}.", ephemeral=True)
+            return
+
+        embed = discord.Embed(title=f"📜 Historia Meczy: {user.display_name}", color=discord.Color.orange())
+
+        for match in history:
+            # Query returns: m.match_id, m.timestamp, m.game_mode, m.stake, m.winner_team,
+            #                m.blue_score_sets, m.orange_score_sets, m.score_details, mp.result, mp.team
+            # Indices: 0:id, 1:ts, 2:mode, 3:stake, 4:winner, 5:b_sets, 6:o_sets, 7:details, 8:result, 9:my_team
+
+            ts = match[1]
+            mode = match[2]
+            stake = match[3]
+            details = match[7]
+            result = match[8] # WIN/LOSS
+
+            date_str = f"<t:{ts}:R>" # Relative time
+            icon = "✅" if result == "WIN" else "❌"
+
+            # Format: [WIN] 2v2 (200) - 2:1, 1:2, 3:0 <date>
+            value = f"**{stake}** 💰 • Wynik: **{details}** • {date_str}"
+
+            embed.add_field(
+                name=f"{icon} {result} | {mode}v{mode}",
+                value=value,
+                inline=False
+            )
 
         await interaction.followup.send(embed=embed)
 
