@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import asyncio
 
 from commands.unbany.tickets import TicketButton
-from database import init_system_tables
+from database import init_system_tables, get_bonus_count
 
 load_dotenv()
 
@@ -27,6 +27,11 @@ bot = commands.Bot(command_prefix="_", intents=intents)
 @bot.event
 async def on_ready():
     await init_system_tables()
+
+    # Print Bonus Limit Status
+    bonus_count = await get_bonus_count()
+    print(f"........ Lucky Bonus Limit: {bonus_count}/50")
+
     await bot.change_presence(activity=discord.CustomActivity(name="Rakietowe 1v1, 2v2, 3v3"))
     print(f"Logged as {bot.user}")
     await bot.tree.sync(guild=GUILD)
