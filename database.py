@@ -272,16 +272,15 @@ async def get_user_achievements(user_id: int):
 
 async def get_leaderboard_data(team_size: int):
     """
-    Retrieves the top 3 players by Wins and Top 3 by Calculated Score for a given team size.
-    Score = (Wins * 3) - (Losses * 1).
-    Returns a dictionary: {'wins': [...], 'score': [...]}
-    Each list contains tuples: (user_id, wins, losses, score)
+    Retrieves the top 3 players by Wins and Top 3 by Earnings (Net Profit) for a given team size.
+    Earnings = Sum(Won Stakes) - Sum(Lost Stakes).
+    Returns a dictionary: {'wins': [...], 'earnings': [...]}
     """
     if team_size not in [1, 2, 3]:
-        return {'wins': [], 'score': []}
+        return {'wins': [], 'earnings': []}
 
     url, token = get_db_config()
-    if not url: return {'wins': [], 'score': []}
+    if not url: return {'wins': [], 'earnings': []}
 
     wins_col = f"{team_size}v{team_size}_W"
     losses_col = f"{team_size}v{team_size}_L"
@@ -295,28 +294,30 @@ async def get_leaderboard_data(team_size: int):
         LIMIT 3
     """
 
-    # 2. Top Score (filtered >= 0)
-    query_score = f"""
-        SELECT user_id, "{wins_col}", "{losses_col}", ("{wins_col}" * 3 - "{losses_col}") as score
-        FROM Leaderboard
-        WHERE ("{wins_col}" > 0 OR "{losses_col}" > 0)
-          AND ("{wins_col}" * 3 - "{losses_col}") >= 0
-        ORDER BY score DESC, "{wins_col}" DESC
+    # 2. Top Earnings
+    query_earnings = f"""
+        SELECT mp.user_id,
+               SUM(CASE WHEN mp.result = 'WIN' THEN m.stake ELSE -m.stake END) as earnings
+        FROM MatchParticipants mp
+        JOIN Matches m ON mp.match_id = m.match_id
+        WHERE m.game_mode = {team_size}
+        GROUP BY mp.user_id
+        ORDER BY earnings DESC
         LIMIT 3
     """
 
     try:
         async with libsql_client.create_client(url, auth_token=token) as client:
             res_wins = await client.execute(query_wins)
-            res_score = await client.execute(query_score)
+            res_earnings = await client.execute(query_earnings)
 
             return {
                 'wins': res_wins.rows,
-                'score': res_score.rows
+                'earnings': res_earnings.rows
             }
     except Exception as e:
         print(f"Error fetching leaderboard for {team_size}v{team_size}: {e}")
-        return {'wins': [], 'score': []}
+        return {'wins': [], 'earnings': []}
 
 async def get_all_winners(team_size: int):
     """
