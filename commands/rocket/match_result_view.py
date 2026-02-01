@@ -202,7 +202,7 @@ class ResultView(discord.ui.View):
             team_name = "Blue" if is_blue else "Orange"
 
             # self.match_type is now a string value, so we can check it directly
-            label = "Mapy (np. 2)" if "Best of 3" in str(self.match_type) else "Gole (np. 5)"
+            label = "Mapy" if "Best of 3" in str(self.match_type) else "Gole"
 
             modal = MatchScoreModal(self, team_name, label)
             await interaction.response.send_modal(modal)
