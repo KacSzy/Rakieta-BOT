@@ -2,7 +2,7 @@ import asyncio
 import random
 import discord
 from commands.unbelievable_API.add_money import add_money_unbelievable
-from const import ADMIN_USER_ID
+from const import ADMIN_USER_ID, MATCH_LOGS_CHANNEL_ID
 from database import update_match_history
 from commands.rocket.leader_roles import update_leader_role
 
@@ -48,7 +48,9 @@ class ResultView(discord.ui.View):
             winning_team = self.orange_team
             losing_team = self.blue_team
 
-        payout_list = []
+        # Prepare for logging
+        from commands.rocket.match import get_user_balance
+        log_data = []
 
         # Calculate Payout & Bonus
         bonus_awarded = False
@@ -61,15 +63,39 @@ class ResultView(discord.ui.View):
 
         total_payout = (self.stake * 2) + bonus_amount
 
+        payout_list = []
+
         # Process winners
         for player in winning_team:
+            # Fetch 'old' balance (which is balance AFTER bet was taken)
+            old_balance = await get_user_balance(player.id)
+
             await add_money_unbelievable(player.id, 0, total_payout)
             await update_match_history(player.id, self.team_size, is_win=True)
             payout_list.append(player.mention)
 
+            # Record for log (New balance = Old + Total Payout)
+            log_data.append({
+                "user": player,
+                "status": "WIN",
+                "old": old_balance,
+                "new": old_balance + total_payout
+            })
+
         # Process losers
         for player in losing_team:
+            # Fetch 'old' balance
+            old_balance = await get_user_balance(player.id)
+
             await update_match_history(player.id, self.team_size, is_win=False)
+
+            # Record for log (New balance = Old, as stake was already lost)
+            log_data.append({
+                "user": player,
+                "status": "LOSS",
+                "old": old_balance,
+                "new": old_balance
+            })
 
         winners_str = ", ".join(payout_list)
 
@@ -79,6 +105,12 @@ class ResultView(discord.ui.View):
             message += f"\n🍀 **LUCKY!** Wylosowano dodatkowy bonus {bonus_amount} 💰 (50% stawki)! Łącznie otrzymują po {total_payout} 💰."
 
         await interaction.channel.send(message)
+
+        # Send Logs
+        try:
+            await self._send_logs(interaction.guild, log_data, bonus_awarded, bonus_amount, total_payout)
+        except Exception as e:
+            print(f"Failed to send logs: {e}")
 
         # Update Leader Roles
         try:
@@ -130,3 +162,32 @@ class ResultView(discord.ui.View):
         await asyncio.sleep(3)
         await interaction.channel.edit(archived=True, locked=True)
         self.stop()
+
+    async def _send_logs(self, guild, log_data, bonus_awarded, bonus_amount, total_payout):
+        channel = guild.get_channel(MATCH_LOGS_CHANNEL_ID)
+        if not channel:
+            return
+
+        title = f"📝 Match Result Log ({self.team_size}v{self.team_size})"
+        desc = (
+            f"**Stake:** {self.stake} 💰\n"
+            f"**Bonus:** {'✅ Tak (+ ' + str(bonus_amount) + ')' if bonus_awarded else '❌ Nie'}\n"
+            f"**Payout per Winner:** {total_payout} 💰"
+        )
+
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.gold() if bonus_awarded else discord.Color.green())
+
+        balance_log = ""
+        for entry in log_data:
+            user = entry["user"]
+            status = entry["status"]
+            old_b = entry["old"]
+            new_b = entry["new"]
+
+            icon = "🏆" if status == "WIN" else "💀"
+            balance_log += f"{icon} **{user.display_name}**: {old_b} ➡ **{new_b}**\n"
+
+        embed.add_field(name="Balance Updates", value=balance_log, inline=False)
+        embed.set_footer(text=f"Match ID: {self.blue_team[0].id if self.blue_team else 'Unknown'}")
+
+        await channel.send(embed=embed)
