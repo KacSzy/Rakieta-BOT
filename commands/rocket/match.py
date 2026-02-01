@@ -54,14 +54,28 @@ async def take_bet(player: discord.Member, stake: int) -> bool:
         "content-type": "application/json",
         "Authorization": f"{UNBELIEVABOAT_API_KEY}"
     }
-    payload = {"cash": 0, "bank": -stake}
+    # Note: UnbelievaBoat API PATCH adds/subtracts.
+    # If we want to ensure deduction, we assume validation happened before.
+    # However, if the user withdraws money mid-validation, this might fail or result in negative balance
+    # depending on guild settings.
+    payload = {"bank": -stake}
 
     url = f"https://unbelievaboat.com/api/v1/guilds/{GUILD_ID}/users/{player.id}"
 
     async with aiohttp.ClientSession() as session:
         async with session.patch(url, json=payload, headers=headers) as response:
-            await response.text()
-            return response.status == 200
+            try:
+                data = await response.json()
+            except:
+                return False
+
+            # If successful, data should contain user object.
+            # We can check if 'bank' is present.
+            if response.status == 200 and "bank" in data:
+                return True
+
+            print(f"Failed to take bet from {player.display_name}. Status: {response.status}, Data: {data}")
+            return False
 
 
 class MatchView(discord.ui.View):
