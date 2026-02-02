@@ -149,12 +149,20 @@ class AdminResolutionModal(discord.ui.Modal):
                 if b > o: blue_wins += 1
                 elif o > b: orange_wins += 1
 
+            if blue_wins == orange_wins:
+                await interaction.response.send_message("🚨 Wynik wskazuje na remis. Admin musi podać wynik rozstrzygający!", ephemeral=True)
+                return
+
+            if self.view_ref.resolved:
+                await interaction.response.send_message("Mecz został już rozstrzygnięty!", ephemeral=True)
+                return
+
+            await interaction.response.send_message(f"👮 **Admin {interaction.user.mention} wymusił wynik:** {final_score_str}", ephemeral=False)
+
             if blue_wins > orange_wins:
                 await self.view_ref._handle_win(interaction, "blue", final_score_str, games, blue_wins, orange_wins)
-            elif orange_wins > blue_wins:
-                await self.view_ref._handle_win(interaction, "orange", final_score_str, games, blue_wins, orange_wins)
             else:
-                await interaction.response.send_message("🚨 Wynik wskazuje na remis. Admin musi podać wynik rozstrzygający!", ephemeral=True)
+                await self.view_ref._handle_win(interaction, "orange", final_score_str, games, blue_wins, orange_wins)
 
         except ValueError as e:
              await interaction.response.send_message(f"🚨 Błąd formatu: {e}", ephemeral=True)
@@ -242,7 +250,7 @@ class ResultView(discord.ui.View):
     async def _handle_win(self, interaction: discord.Interaction, winning_team_name, score_str, games, b_wins, o_wins):
         """Process payout, db updates, and achievements."""
         if self.resolved:
-            await interaction.response.send_message("Mecz został już rozstrzygnięty!", ephemeral=True)
+            await interaction.followup.send("Mecz został już rozstrzygnięty!", ephemeral=True)
             return
         self.resolved = True
 
