@@ -101,6 +101,81 @@ class MatchScoreModal(discord.ui.Modal):
         await self.view_ref.check_results(interaction)
 
 
+class AdminResolutionModal(discord.ui.Modal):
+    def __init__(self, view_ref: 'ResultView'):
+        super().__init__(title="👮 Admin: Wymuś wynik meczu")
+        self.view_ref = view_ref
+
+        self.scores_input = discord.ui.TextInput(
+            label="Wynik (Blue-Orange)",
+            placeholder="np. 2-1, 1-3 (format: Blue-Orange)",
+            required=True,
+            style=discord.TextStyle.short
+        )
+        self.add_item(self.scores_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        score_str = self.scores_input.value.strip()
+
+        try:
+            # Normalize: remove spaces around commas, handle - and :
+            parts = score_str.split(',')
+            games = []
+            clean_parts = []
+
+            for p in parts:
+                p = p.strip()
+                if not p: continue
+                # Allow 2-1 or 2:1
+                p = p.replace('-', ':')
+                if ':' not in p:
+                    raise ValueError(f"Niepoprawny format gry: '{p}'. Użyj 'Blue:Orange'")
+
+                b_str, o_str = p.split(':')
+                b = int(b_str)
+                o = int(o_str)
+                games.append((b, o))
+                clean_parts.append(f"{b}:{o}")
+
+            if not games:
+                await interaction.response.send_message("🚨 Nie podano wyniku.", ephemeral=True)
+                return
+
+            final_score_str = ", ".join(clean_parts)
+
+            blue_wins = 0
+            orange_wins = 0
+            for b, o in games:
+                if b > o: blue_wins += 1
+                elif o > b: orange_wins += 1
+
+            if blue_wins > orange_wins:
+                await self.view_ref._handle_win(interaction, "blue", final_score_str, games, blue_wins, orange_wins)
+            elif orange_wins > blue_wins:
+                await self.view_ref._handle_win(interaction, "orange", final_score_str, games, blue_wins, orange_wins)
+            else:
+                await interaction.response.send_message("🚨 Wynik wskazuje na remis. Admin musi podać wynik rozstrzygający!", ephemeral=True)
+
+        except ValueError as e:
+             await interaction.response.send_message(f"🚨 Błąd formatu: {e}", ephemeral=True)
+        except Exception as e:
+             await interaction.response.send_message(f"🚨 Wystąpił błąd: {e}", ephemeral=True)
+
+
+class AdminResolutionView(discord.ui.View):
+    def __init__(self, result_view: 'ResultView'):
+        super().__init__(timeout=None)
+        self.result_view = result_view
+
+    @discord.ui.button(label="👮 Wymuś wynik (Admin)", style=discord.ButtonStyle.danger)
+    async def force_result(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != ADMIN_USER_ID:
+            await interaction.response.send_message("Brak uprawnień.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(AdminResolutionModal(self.result_view))
+
+
 class ResultView(discord.ui.View):
     def __init__(self, blue_team, orange_team, stake, team_size, match_type):
         super().__init__(timeout=None)
@@ -113,6 +188,7 @@ class ResultView(discord.ui.View):
         # Reports format "2:1, 1:3"
         self.blue_report = None
         self.orange_report = None
+        self.resolved = False
 
     def _get_captain(self, team_list):
         return team_list[0] if team_list else None
@@ -152,17 +228,23 @@ class ResultView(discord.ui.View):
                 self.orange_report = None
         else:
             # Conflict
+            admin_view = AdminResolutionView(self)
             await interaction.channel.send(
                 f"🚨 **KONFLIKT!**\n"
                 f"🔵 Blue zgłasza: {self.blue_report}\n"
                 f"🟠 Orange zgłasza: {self.orange_report}\n"
-                f"Ustalcie poprawny wynik i wyślijcie ponownie lub zawołajcie admina <@{ADMIN_USER_ID}>."
+                f"Ustalcie poprawny wynik i wyślijcie ponownie lub zawołajcie admina <@{ADMIN_USER_ID}>.",
+                view=admin_view
             )
             self.blue_report = None
             self.orange_report = None
 
     async def _handle_win(self, interaction: discord.Interaction, winning_team_name, score_str, games, b_wins, o_wins):
         """Process payout, db updates, and achievements."""
+        if self.resolved:
+            await interaction.response.send_message("Mecz został już rozstrzygnięty!", ephemeral=True)
+            return
+        self.resolved = True
 
         # Determine Teams
         if winning_team_name == "blue":
